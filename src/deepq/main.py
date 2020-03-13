@@ -43,12 +43,12 @@ class Config:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
-    print("===========Deepq Hyperparameters Setting=============")
+    print("===========Deepq Hyperparameters Setting=======================")
     for k, v in Config.__dict__.items():
         if not k.startswith('_'):
             parser.add_argument(f'--{k}', type=type(v))
-            print(f"==>>{k}\t\t\t||\t\t\t{v}")
-    print("===========Deepq Hyperparameters Setting=============")
+            print(f"||\t{k}\t\t\t\t||\t\t\t\t{v}")
+    print("===========Deepq Hyperparameters Setting=======================")
     args = parser.parse_args()
     for k, v in args.__dict__.items():
         if hasattr(Config, k):
