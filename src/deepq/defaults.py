@@ -7,7 +7,7 @@ class Config:
     double = True
     prioritize = True
     nstep = 3
-    noise = True
+    noisy = True
     noise_std = 0.5
 
     max_steps = int(5e7)

@@ -2,7 +2,7 @@ import unittest
 import gym
 
 from src.common.async_replay import AsyncReplayBuffer
-
+from src.common.atari_wrapper import make_atari, wrap_deepmind
 
 
 class TestAsyncReplay(unittest.TestCase):
@@ -10,9 +10,8 @@ class TestAsyncReplay(unittest.TestCase):
     def test_async(self):
         memory = AsyncReplayBuffer(int(1e6), 32, True, 0.5)
 
-
-        env = gym.make('BreakoutNoFrameskip-v4')
-
+        env = make_atari('BreakoutNoFrameskip-v4', 108000)
+        env = wrap_deepmind(env, frame_stack=True)
         s = env.reset()
 
         while True:
@@ -26,4 +25,6 @@ class TestAsyncReplay(unittest.TestCase):
 
         for _ in range(10):
             o = memory.sample(beta=0.4)
-            print(o)
+            for x in o:
+                print(type(o), o.size())
+    
