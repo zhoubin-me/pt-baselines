@@ -37,9 +37,10 @@ class BaseAgent:
         while True:
             action = self.eval_step(state)
             state, reward, done, info = env.step(action)
-            if 'episode' in info[0]:
-                ret = info[0]['episode']['r']
-                break
+            if isinstance(info, dict)
+                if 'episode' in info:
+                    ret = info['episode']['r']
+                    break
         return ret
 
     def eval_episodes(self):
