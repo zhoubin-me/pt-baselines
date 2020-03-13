@@ -3,7 +3,7 @@ import gym
 
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.atari_wrapper import make_atari, wrap_deepmind
-
+from src.deepq.model import RainbowNet
 
 class TestAsyncReplay(unittest.TestCase):
 
@@ -13,6 +13,7 @@ class TestAsyncReplay(unittest.TestCase):
         env = make_atari('BreakoutNoFrameskip-v4', 108000)
         env = wrap_deepmind(env, frame_stack=True)
         s = env.reset()
+
 
         while True:
             action = env.action_space.sample()
@@ -24,7 +25,10 @@ class TestAsyncReplay(unittest.TestCase):
                 s = s_next
 
         for _ in range(10):
-            o = memory.sample(beta=0.4)
+            s, a, r, d, s_next, _, _ = memory.sample(beta=0.4)
             for x in o:
                 print(type(x), x.size())
-    
+
+            
+
+

@@ -253,6 +253,20 @@ class ScaledFloatFrame(gym.ObservationWrapper):
         # with smaller replay buffers only.
         return np.array(observation).astype(np.float32) / 255.0
 
+
+class TransposeImage(gym.ObservationWrapper):
+    def __init__(self, env=None):
+        super(TransposeImage, self).__init__(env)
+        obs_shape = self.observation_space.shape
+        self.observation_space = spaces.Box(
+            self.observation_space.low[0, 0, 0],
+            self.observation_space.high[0, 0, 0],
+            [obs_shape[2], obs_shape[1], obs_shape[0]],
+            dtype=self.observation_space.dtype)
+
+    def observation(self, observation):
+        return observation.transpose(2, 0, 1)
+
 class LazyFrames(object):
     def __init__(self, frames):
         """This object ensures that common frames between the observations are only stored once.
@@ -267,7 +281,7 @@ class LazyFrames(object):
 
     def _force(self):
         if self._out is None:
-            self._out = np.concatenate(self._frames, axis=-1)
+            self._out = np.concatenate(self._frames, axis=0)
             self._frames = None
         return self._out
 
@@ -307,6 +321,8 @@ def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, 
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
     env = WarpFrame(env)
+    if len(env.observation_space.shape) == 3:
+        env = TransposeImage(env)
     if scale:
         env = ScaledFloatFrame(env)
     if clip_rewards:
