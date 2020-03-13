@@ -26,12 +26,12 @@ def set_thread(n):
     torch.set_num_threads(n)
 
 
-def make_env(game, seed, prefix, record_video=False):
+def make_env(game, log_prefix, record_video=False):
     env = make_atari(f'{game}NoFrameskip-v4')
     env = wrap_deepmind(env, frame_stack=True)
-    env = Monitor(env=env, filename=f'log/{game}-{seed}/{prefix}', allow_early_resets=True)
+    env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
     if record_video:
-        env = wrappers.Monitor(env, f'log/{game}-{seed}/video/{prefix}')
+        env = wrappers.Monitor(env, f'{log_prefix}/video')
     return env
 
 
@@ -41,4 +41,3 @@ def random_seed(seed=1):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(np.random.randint(int(1e6)))
-    # if torch.cuda.is_available(): torch.cuda.manual_seed_all(999)

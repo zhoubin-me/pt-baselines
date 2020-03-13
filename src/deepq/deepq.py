@@ -1,18 +1,18 @@
 import torch
+import copy
+import time
 import torch.multiprocessing as mp
 import numpy as np
-import copy
 from collections import deque
 
 from src.common.async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.common.utils import close_obj, tensor
+from src.common.base_agent import BaseAgent
+from src.common.utils import close_obj, tensor, make_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
-
-from src.deepq.main import Config as cfg
+from src.common.logger import EpochLogger
 from src.deepq.model import C51Net
-from src.deepq.main import make_env
 
 class RainbowActor(AsyncActor):
     def __init__(self, cfg, lock):
@@ -22,8 +22,9 @@ class RainbowActor(AsyncActor):
         self.start()
 
     def _set_up(self):
+        cfg = self.cfg
         self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
-        self._env = make_env(cfg.game, cfg.seed, 'train', False)
+        self._env = make_env(cfg.game, f'{cfg.log_dir}/train', False)
         self._random_action_prob = LinearSchedule(1.0, cfg.min_epsilon, cfg.epsilon_steps)
 
     def _transition(self):
@@ -54,14 +55,14 @@ class RainbowActor(AsyncActor):
         return entry
 
 
-class RainbowAgent:
-    def __init__(self, cfg=cfg):
+class RainbowAgent(BaseAgent):
+    def __init__(self, cfg):
+        super(RainbowAgent, self).__init__(cfg)
         lock = mp.Lock()
-
-        self.cfg = cfg
         self.lock = lock
         self.actor = RainbowActor(cfg, self.lock)
-        self.test_env = make_env(cfg.game, cfg.seed, 'test', True)
+        self.test_env = make_env(cfg.game, f'{cfg.log_dir}/test', True)
+        self.logger = EpochLogger(cfg.log_dir)
         self.replay = AsyncReplayBuffer(
             buffer_size=cfg.replay_size,
             batch_size=cfg.batch_size,
@@ -98,7 +99,6 @@ class RainbowAgent:
 
         self.state_normalizer = ImageNormalizer()
         self.reward_normalizer = SignNormalizer()
-
         self.total_steps = 0
 
     def close(self):
@@ -126,7 +126,11 @@ class RainbowAgent:
 
             if done:
                 self.tracker.clear()
-            self.replay.add_batch(experiences)
+                if isinstance(info, dict):
+                    if 'episode' in info:
+                        self.logger.store(TrainEpRet=info['episode']['r'])
+
+        self.replay.add_batch(experiences)
 
         ## Upate
         if self.total_steps > cfg.exploration_steps:
@@ -167,7 +171,7 @@ class RainbowAgent:
 
             _, log_prob = self.network(states)
             log_prob = log_prob[self.batch_indices, actions, :]
-            error = 0 - target_prob.mul(log_prob).sum(dim=-1)
+            error = 0 - target_prob.mul_(log_prob).sum(dim=-1)
 
             if cfg.prioritize:
                 weights, idxes = extras
@@ -183,5 +187,59 @@ class RainbowAgent:
             with cfg.lock:
                 self.optimizer.step()
 
-        if self.total_steps  % cfg.target_network_update_freq == 0:
+            self.logger.store(Loss=loss.item())
+
+        if self.total_steps % cfg.target_network_update_freq == 0:
             self.target_network.load_state_dict(self.network.state_dict())
+
+    def run(self):
+
+        logger = self.logger
+        cfg = self.cfg
+
+        t0 = time.time()
+        logger.store(TrainEpRet=0, Loss=0)
+
+        while self.total_steps < self.cfg.max_steps:
+            self.step()
+
+            if self.total_steps % self.cfg.save_interval == 0:
+                self.save(f'{self.cfg.log_dir}/{self.total_steps}')
+
+            if self.total_steps % self.cfg.log_interval == 0:
+                logger.log_tabular('TotalEnvInteracts', self.total_steps)
+                logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
+                logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
+                logger.log_tabular('TrainEpRet', with_min_and_max=True)
+                logger.log_tabular('Loss', average_only=True)
+                logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
+                t0 = time.time()
+                logger.dump_tabular(self.total_steps)
+
+            if self.total_steps % cfg.eval_interval == 0:
+                test_returns = self.eval_episodes()
+                logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
+                test_tabular = {
+                    "Epoch": self.total_steps // cfg.eval_interval,
+                    "Steps": self.total_steps,
+                    "NumOfEp": len(test_returns),
+                    "AverageTestEpRet": np.mean(test_returns),
+                    "StdTestEpRet": np.std(test_returns),
+                    "MaxTestEpRet": np.max(test_returns),
+                    "MinTestEpRet": np.min(test_returns)}
+                logger.dump_test(test_tabular)
+
+        self.close()
+
+
+    def eval_step(self, state):
+        self.state_normalizer.set_read_only()
+        if np.random.rand() > self.cfg.test_epsilon:
+            state = self.state_normalizer(state)
+            prob, _ = self.network(state)
+            q = (prob * self.atoms).sum(-1)
+            action = np.argmax(q.tolist())
+        else:
+            action = self.test_env.action_space.sample()
+        self.state_normalizer.unset_read_only()
+        return action
