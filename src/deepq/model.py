@@ -17,7 +17,7 @@ class NoisyLinear(nn.Module):
         self.bias_sigma = nn.Parameter(torch.empty(out_features))
         self.register_buffer('bias_epsilon', torch.empty(out_features))
         self.reset_parameters()
-        self.reset_noise()
+        self.reset_noise(std_init)
 
     def reset_parameters(self):
         mu_range = 1 / np.sqrt(self.in_features)
@@ -45,15 +45,12 @@ class NoisyLinear(nn.Module):
 
 
 
-class RainbowNet(nn.Module):
-
+class C51Net(nn.Module):
     def __init__(self, action_dim, num_atoms, noisy=False, noise_std=0.5, duel=False, in_channels=4):
-
-        super(RainbowNet, self).__init__()
-
+        super(C51Net, self).__init__()
         self.num_atoms = num_atoms
         self.action_dim = action_dim
-
+        self.noise_std = noise_std
         M = NoisyLinear if noisy else nn.Linear
 
         self.convs = nn.Sequential(
@@ -61,26 +58,29 @@ class RainbowNet(nn.Module):
             nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
             nn.Conv2d(64, 64, 3, stride=1), nn.ReLU(),
             nn.Flatten(),
-            
         )
         
         self.fc = M(64 * 7 * 7, 512)
-
-        self.V = M(512, num_atoms)
         self.A = M(512, num_atoms * action_dim)
-
+        if duel:
+            self.V = M(512, num_atoms)
+        else:
+            self.V = None
 
     def forward(self, x):
         phi = self.fc(self.convs(x))
-
-        v = self.V(phi).view(-1, 1, self.num_atoms)
         a = self.A(phi).view(-1, self.action_dim, self.num_atoms)
-        q = v + a - a.mean(dim=1, keepdim=True)
+        if self.V is not None:
+            v = self.v(phi)
+            q = v + a - a.mean(dim=1, keepdim=True)
+        else:
+            q = a
         prob = F.softmax(q, dim=-1)
         log_prob = F.log_softmax(q, dim=-1)
         return prob, log_prob
     
-    def reset_noise(self, std):
+    def reset_noise(self, std=None):
+        if std is None: std = self.noise_std
         for name, m in self.named_children():
             if isinstance(m, NoisyLinear):
                 m.reset_noise(std)

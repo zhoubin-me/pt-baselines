@@ -3,7 +3,7 @@ import torch.multiprocessing as mp
 from src.common.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from src.common.utils import tensor
 
-# Adopted from ShangtongZhang/DeepRL
+# Copied from ShangtongZhang/DeepRL
 # https://github.com/ShangtongZhang/DeepRL/blob/master/deep_rl/component/replay.py
 
 class AsyncReplayBuffer(mp.Process):
@@ -13,10 +13,10 @@ class AsyncReplayBuffer(mp.Process):
     FEED_BATCH = 3
     UPDATE = 4
 
-    def __init__(self, memory_size, batch_size, prioritize=False, alpha=0.5, beta0=0.4):
+    def __init__(self, buffer_size, batch_size, prioritize=False, alpha=0.5, beta0=0.4):
         mp.Process.__init__(self)
         self.pipe, self.worker_pipe = mp.Pipe()
-        self.memory_size = memory_size
+        self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.prioritize = prioritize
         self.alpha = alpha
@@ -26,9 +26,9 @@ class AsyncReplayBuffer(mp.Process):
 
     def run(self):
         if self.prioritize:
-            replay = PrioritizedReplayBuffer(self.memory_size, self.alpha)
+            replay = PrioritizedReplayBuffer(self.buffer_size, self.alpha)
         else:
-            replay = ReplayBuffer(self.memory_size)
+            replay = ReplayBuffer(self.buffer_size)
 
         cache = []
         pending_batch = None
