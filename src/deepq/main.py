@@ -49,7 +49,6 @@ class Config:
     log_dir = ""
 
 if __name__ == '__main__':
-    # mp.set_start_method('spawn', force=True)
     parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
     for k, v in Config.__dict__.items():
         if not k.startswith('_'):
@@ -68,6 +67,7 @@ if __name__ == '__main__':
 
     mkdir(args.log_dir)
     agent = RainbowAgent(cfg=args)
+    agent.logger.save_config(args)
 
     if len(args.ckpt) == 0:
         agent.run()
