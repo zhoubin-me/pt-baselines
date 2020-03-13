@@ -15,10 +15,8 @@ from src.common.logger import EpochLogger
 from src.deepq.model import C51Net
 
 class RainbowActor(AsyncActor):
-    def __init__(self, cfg, lock):
+    def __init__(self, cfg):
         super(RainbowActor, self).__init__(cfg)
-        self.cfg = cfg
-        self.lock = lock
         self.start()
 
     def _set_up(self):
@@ -26,14 +24,16 @@ class RainbowActor(AsyncActor):
         self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
         self._env = make_env(cfg.game, f'{cfg.log_dir}/train', False)
         self._random_action_prob = LinearSchedule(1.0, cfg.min_epsilon, cfg.epsilon_steps)
+        self._state_normalizer = ImageNormalizer()
+
 
     def _transition(self):
         if self._state is None:
             self._state = self._env.reset()
 
         cfg = self.cfg
-        state = torch.from_numpy(cfg.state_normalizer([self._state])).cuda()
-        with self.lock, torch.no_grad():
+        state = torch.from_numpy(self._state_normalizer([self._state])).float().cuda()
+        with mp.Lock(), torch.no_grad():
             probs, _ = self._network(state)
 
         q_values = (probs * self._atoms).sum(-1)
@@ -52,15 +52,15 @@ class RainbowActor(AsyncActor):
         entry = [self._state, action, reward, next_state, int(done), info]
         self._total_steps += 1
         self._state = next_state
+        if done:
+            self._state = self._env.reset()
         return entry
 
 
 class RainbowAgent(BaseAgent):
     def __init__(self, cfg):
         super(RainbowAgent, self).__init__(cfg)
-        lock = mp.Lock()
-        self.lock = lock
-        self.actor = RainbowActor(cfg, self.lock)
+        self.actor = RainbowActor(cfg)
         self.test_env = make_env(cfg.game, f'{cfg.log_dir}/test', True)
         self.logger = EpochLogger(cfg.log_dir)
         self.replay = AsyncReplayBuffer(
@@ -141,7 +141,7 @@ class RainbowAgent(BaseAgent):
             next_states = self.state_normalizer(next_states)
             actions = actions.long()
 
-            
+
             with torch.no_grad():
                 prob_next, _ = self.target_network(next_states)
                 if cfg.double:
@@ -184,7 +184,7 @@ class RainbowAgent(BaseAgent):
 
             self.optimizer.zero_grad()
             loss.backward()
-            with cfg.lock:
+            with mp.Lock():
                 self.optimizer.step()
 
             self.logger.store(Loss=loss.item())

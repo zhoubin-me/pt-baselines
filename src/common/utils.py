@@ -2,11 +2,15 @@ import torch
 import numpy as np
 import random
 import os
+from pathlib import Path
 
 from gym import wrappers
 from src.common.atari_wrapper import make_atari, wrap_deepmind
 from src.common.monitor import Monitor
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 
+def mkdir(path):
+    Path(path).mkdir(parents=True, exist_ok=True)
 
 def tensor(x):
     if isinstance(x, torch.Tensor):
@@ -27,12 +31,15 @@ def set_thread(n):
 
 
 def make_env(game, log_prefix, record_video=False):
-    env = make_atari(f'{game}NoFrameskip-v4')
-    env = wrap_deepmind(env, frame_stack=True)
-    env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-    if record_video:
-        env = wrappers.Monitor(env, f'{log_prefix}/video')
-    return env
+    def trunk():
+        env = make_atari(f'{game}NoFrameskip-v4')
+        env = wrap_deepmind(env, frame_stack=True)
+        env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
+        if record_video:
+            env = wrappers.Monitor(env, f'{log_prefix}', force=True)
+        return env
+    # env = DummyVecEnv([trunk])
+    return trunk()
 
 
 def random_seed(seed=1):

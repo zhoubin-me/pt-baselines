@@ -59,7 +59,7 @@ class C51Net(nn.Module):
             nn.Conv2d(64, 64, 3, stride=1), nn.ReLU(),
             nn.Flatten(),
         )
-        
+
         self.fc = M(64 * 7 * 7, 512)
         self.A = M(512, num_atoms * action_dim)
         if duel:
@@ -71,14 +71,14 @@ class C51Net(nn.Module):
         phi = self.fc(self.convs(x))
         a = self.A(phi).view(-1, self.action_dim, self.num_atoms)
         if self.V is not None:
-            v = self.v(phi)
-            q = v + a - a.mean(dim=1, keepdim=True)
+            v = self.V(phi)
+            q = v.view(-1, 1, self.num_atoms) + a - a.mean(dim=1, keepdim=True)
         else:
             q = a
         prob = F.softmax(q, dim=-1)
         log_prob = F.log_softmax(q, dim=-1)
         return prob, log_prob
-    
+
     def reset_noise(self, std=None):
         if std is None: std = self.noise_std
         for name, m in self.named_children():
