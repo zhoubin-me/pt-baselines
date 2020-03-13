@@ -37,7 +37,7 @@ class BaseAgent:
         while True:
             action = self.eval_step(state)
             state, reward, done, info = env.step(action)
-            if isinstance(info, dict)
+            if isinstance(info, dict):
                 if 'episode' in info:
                     ret = info['episode']['r']
                     break
