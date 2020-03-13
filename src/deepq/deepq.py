@@ -105,6 +105,18 @@ class RainbowAgent(BaseAgent):
         close_obj(self.replay)
         close_obj(self.actor)
 
+    def eval_step(self, state):
+        self.state_normalizer.set_read_only()
+        if np.random.rand() > self.cfg.test_epsilon:
+            state = torch.from_numpy(self.state_normalizer(state)).float().cuda()
+            prob, _ = self.network(state)
+            q = (prob * self.atoms).sum(-1)
+            action = np.argmax(q.tolist())
+        else:
+            action = self.test_env.action_space.sample()
+        self.state_normalizer.unset_read_only()
+        return action
+
     def step(self):
         cfg = self.cfg
         if cfg.noisy:
@@ -231,15 +243,3 @@ class RainbowAgent(BaseAgent):
 
         self.close()
 
-
-    def eval_step(self, state):
-        self.state_normalizer.set_read_only()
-        if np.random.rand() > self.cfg.test_epsilon:
-            state = self.state_normalizer(state)
-            prob, _ = self.network(state)
-            q = (prob * self.atoms).sum(-1)
-            action = np.argmax(q.tolist())
-        else:
-            action = self.test_env.action_space.sample()
-        self.state_normalizer.unset_read_only()
-        return action
