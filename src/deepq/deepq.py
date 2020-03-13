@@ -108,7 +108,7 @@ class RainbowAgent(BaseAgent):
     def eval_step(self, state):
         self.state_normalizer.set_read_only()
         if np.random.rand() > self.cfg.test_epsilon:
-            state = torch.from_numpy(self.state_normalizer(state)).float().cuda()
+            state = torch.from_numpy(self.state_normalizer([state])).float().cuda()
             prob, _ = self.network(state)
             q = (prob * self.atoms).sum(-1)
             action = np.argmax(q.tolist())
