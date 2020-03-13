@@ -14,6 +14,9 @@ class TestAsyncReplay(unittest.TestCase):
         env = wrap_deepmind(env, frame_stack=True)
         s = env.reset()
 
+        network = RainbowNet(env.action_dim.n, 51, noisy=True, duel=True)
+        network.cuda()
+        network.reset_noise(0.5)
 
         while True:
             action = env.action_space.sample()
@@ -26,8 +29,8 @@ class TestAsyncReplay(unittest.TestCase):
 
         for _ in range(10):
             s, a, r, d, s_next, _, _ = memory.sample(beta=0.4)
-            for x in o:
-                print(type(x), x.size())
+            prob, log_prob = network(s)
+            print(prob.shape, log_prob.shape)
 
             
 
