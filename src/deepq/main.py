@@ -1,8 +1,9 @@
 
 import argparse
+import torch.multiprocessing as mp
 import numpy as np
 
-from src.common.utils import set_thread, random_seed
+from src.common.utils import set_thread, random_seed, mkdir
 from src.deepq.deepq import RainbowAgent
 
 
@@ -48,14 +49,13 @@ class Config:
     log_dir = ""
 
 if __name__ == '__main__':
+    # mp.set_start_method('spawn', force=True)
     parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
-    print("===========Deepq Hyperparameters Setting=======================")
     for k, v in Config.__dict__.items():
         if not k.startswith('_'):
             parser.add_argument(f'--{k}', type=type(v), default=v)
-            print(f"||\t{k}\t\t\t\t||\t\t\t\t{v}")
-    print("===========Deepq Hyperparameters Setting=======================")
     args = parser.parse_args()
+    print(args)
 
     if len(args.log_dir) == 0:
         args.log_dir = f'log/rainbow-{args.game}-{args.seed}/'
@@ -63,6 +63,10 @@ if __name__ == '__main__':
     if len(args.ckpt) > 0:
         args.log_dir = f'log/rainbow-{args.game}-{args.seed}-eval/'
 
+    random_seed(args.seed)
+    set_thread(1)
+
+    mkdir(args.log_dir)
     agent = RainbowAgent(cfg=args)
 
     if len(args.ckpt) == 0:
