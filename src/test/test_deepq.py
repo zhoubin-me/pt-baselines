@@ -3,7 +3,7 @@ import gym
 
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.atari_wrapper import make_atari, wrap_deepmind
-from src.deepq.model import RainbowNet
+from src.deepq.model import C51Net
 
 class TestAsyncReplay(unittest.TestCase):
 
@@ -14,7 +14,7 @@ class TestAsyncReplay(unittest.TestCase):
         env = wrap_deepmind(env, frame_stack=True)
         s = env.reset()
 
-        network = RainbowNet(env.action_dim.n, 51, noisy=True, duel=True)
+        network = C51Net(env.action_space.n, 51, noisy=True, duel=True)
         network.cuda()
         network.reset_noise(0.5)
 

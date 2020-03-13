@@ -1,4 +1,5 @@
 
+import argparse
 
 from src.common.utils import set_thread, random_seed
 from src.deepq.deepq import RainbowAgent
@@ -10,8 +11,9 @@ class Config:
     dueling = True
     double = True
     prioritize = True
-    nstep = 3
     noisy = True
+
+    nstep = 3
     noise_std = 0.5
     num_atoms = 51
     v_max = 10
@@ -25,6 +27,10 @@ class Config:
     adam_eps = 0.00015
 
     max_steps = int(5e7)
+    log_interval = 10000
+    eval_interval = 100000
+    save_interval = 1000000
+
     exploration_steps = 20000
     target_network_update_freq = 8000
     epsilon_steps = int(1e6)
@@ -35,7 +41,16 @@ class Config:
     replay_beta0 = 0.4
 
 
-
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
+    print("===========Deepq Hyperparameters Setting=============")
     for k, v in Config.__dict__.items():
-        print(k ,v)
+        if not k.startswith('_'):
+            parser.add_argument(f'--{k}', type=type(v))
+            print(f"==>>{k}\t\t\t||\t\t\t{v}")
+    print("===========Deepq Hyperparameters Setting=============")
+    args = parser.parse_args()
+    for k, v in args.__dict__.items():
+        if hasattr(Config, k):
+            setattr(Config, k, v)
+
