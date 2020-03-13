@@ -68,6 +68,7 @@ if __name__ == '__main__':
 
     mkdir(args.log_dir)
     agent = RainbowAgent(cfg=args)
+    agent.logger.save_config(args)
 
     if len(args.ckpt) == 0:
         agent.run()
