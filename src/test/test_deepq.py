@@ -26,5 +26,5 @@ class TestAsyncReplay(unittest.TestCase):
         for _ in range(10):
             o = memory.sample(beta=0.4)
             for x in o:
-                print(type(o), o.size())
+                print(type(x), x.size())
     
