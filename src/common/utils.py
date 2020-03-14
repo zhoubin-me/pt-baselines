@@ -7,7 +7,6 @@ from pathlib import Path
 from gym import wrappers
 from src.common.atari_wrapper import make_atari, wrap_deepmind
 from src.common.monitor import Monitor
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -38,7 +37,6 @@ def make_env(game, log_prefix, record_video=False):
         if record_video:
             env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
-    # env = DummyVecEnv([trunk])
     return trunk()
 
 
