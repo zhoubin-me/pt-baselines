@@ -15,14 +15,15 @@ from src.common.logger import EpochLogger
 from src.deepq.model import C51Net
 
 class RainbowActor(AsyncActor):
-    def __init__(self, cfg):
+    def __init__(self, cfg, n):
+        self.n = n
         super(RainbowActor, self).__init__(cfg)
         self.start()
 
     def _set_up(self):
         cfg = self.cfg
         self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
-        self._env = make_env(cfg.game, f'{cfg.log_dir}/train', False)
+        self._env = make_env(cfg.game, f'{cfg.log_dir}/train_{self.n}', False)
         self._random_action_prob = LinearSchedule(1.0, cfg.min_epsilon, cfg.epsilon_steps)
         self._state_normalizer = ImageNormalizer()
 
@@ -32,8 +33,8 @@ class RainbowActor(AsyncActor):
             self._state = self._env.reset()
 
         cfg = self.cfg
-        state = torch.from_numpy(self._state_normalizer([self._state])).float().cuda()
-        with mp.Lock(), torch.no_grad():
+        state = torch.from_numpy(self._state_normalizer([self._state])).float()
+        with torch.no_grad():
             probs, _ = self._network(state)
 
         q_values = (probs * self._atoms).sum(-1)
@@ -60,7 +61,7 @@ class RainbowActor(AsyncActor):
 class RainbowAgent(BaseAgent):
     def __init__(self, cfg):
         super(RainbowAgent, self).__init__(cfg)
-        self.actor = RainbowActor(cfg)
+        self.actors = [RainbowActor(cfg, n) for n in cfg.num_actors]
         self.test_env = make_env(cfg.game, f'{cfg.log_dir}/test', True)
         self.logger = EpochLogger(cfg.log_dir)
         self.replay = AsyncReplayBuffer(
@@ -84,7 +85,8 @@ class RainbowAgent(BaseAgent):
         self.network.train()
         self.network.share_memory()
 
-        self.actor.set_network(self.network)
+        for actor in self.actors:
+            actor.sync_network(self.network.cpu())
 
         self.optimizer = torch.optim.Adam(
             params=self.network.parameters(),
@@ -103,7 +105,8 @@ class RainbowAgent(BaseAgent):
 
     def close(self):
         close_obj(self.replay)
-        close_obj(self.actor)
+        for actor in self.actors:
+            close_obj(actor)
 
     def eval_step(self, state):
         self.state_normalizer.set_read_only()
@@ -124,7 +127,10 @@ class RainbowAgent(BaseAgent):
             self.target_network.reset_noise(cfg.noise_std)
 
         ## Environment Step
-        transitions = self.actor.step()
+        transitions = []
+        for actor in self.actors:
+            transitions += actor.step()
+
         experiences = []
         for state, action, reward, next_state, done, info in transitions:
             self.total_steps += 1
@@ -196,13 +202,14 @@ class RainbowAgent(BaseAgent):
 
             self.optimizer.zero_grad()
             loss.backward()
-            with mp.Lock():
-                self.optimizer.step()
+            self.optimizer.step()
 
             self.logger.store(Loss=loss.item())
 
         if self.total_steps % cfg.target_network_update_freq == 0:
             self.target_network.load_state_dict(self.network.state_dict())
+            for actor in self.actors:
+                actor.sync_network(self.network.cpu())
 
     def run(self):
 
