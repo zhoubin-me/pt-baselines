@@ -4,17 +4,18 @@ import torch.multiprocessing as mp
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.deepq.deepq import RainbowAgent
+from src.a3c.a3c import A3CAgent
 
 
 class Config:
     game = 'Breakout'
-    seed = 1
+    seed = 0
 
     dueling = True
     double = True
     prioritize = True
-    noisy = True
+    noisy = False
+    num_actors = 5
 
     nstep = 3
     noise_std = 0.5
@@ -25,19 +26,18 @@ class Config:
 
     sgd_update_frequency = 4
     discount = 0.99
-    batch_size = 32
-    adam_lr = 0.0000625
+    batch_size = 32 * num_actors
+    adam_lr = 0.0000625 * num_actors
     adam_eps = 0.00015
 
     max_steps = int(5e7)
-    max_episode_steps = 108000
     log_interval = 10000
     eval_interval = 100000
     save_interval = 1000000
     eval_episodes = 10
+    target_network_update_freq = 8000
 
     exploration_steps = 20000
-    target_network_update_freq = 8000
     epsilon_steps = int(1e6)
     min_epsilon = 0.01
     test_epsilon = 0.01
@@ -50,7 +50,7 @@ class Config:
     log_dir = ""
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
+    parser = argparse.ArgumentParser(description='A3C Hyperparameters')
     for k, v in Config.__dict__.items():
         if not k.startswith('_'):
             parser.add_argument(f'--{k}', type=type(v), default=v)
@@ -58,16 +58,16 @@ if __name__ == '__main__':
     print(args)
 
     if len(args.log_dir) == 0:
-        args.log_dir = f'log/rainbow-{args.game}-{args.seed}/'
+        args.log_dir = f'log/a3c-{args.game}-{args.seed}/'
 
     if len(args.ckpt) > 0:
-        args.log_dir = f'log/rainbow-{args.game}-{args.seed}-eval/'
+        args.log_dir = f'log/a3c-{args.game}-{args.seed}-eval/'
 
     random_seed(args.seed)
     set_thread(1)
 
     mkdir(args.log_dir)
-    agent = RainbowAgent(cfg=args)
+    agent = A3CAgent(cfg=args)
     agent.logger.save_config(args)
 
     if len(args.ckpt) == 0:

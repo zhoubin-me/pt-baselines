@@ -29,11 +29,12 @@ def set_thread(n):
     torch.set_num_threads(n)
 
 
-def make_env(game, log_prefix, record_video=False):
+def make_env(game, log_prefix, record_video=False, seed=1234):
     def trunk():
         env = make_atari(f'{game}NoFrameskip-v4')
-        env = wrap_deepmind(env, frame_stack=True)
+        env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
+        env = wrap_deepmind(env, episode_life=not record_video, frame_stack=True)
         if record_video:
             env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
