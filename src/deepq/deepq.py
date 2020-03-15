@@ -35,7 +35,7 @@ class RainbowActor(AsyncActor):
         cfg = self.cfg
         state = torch.from_numpy(self._state_normalizer([self._state])).float().cuda()
 
-        if  self.cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
+        if  cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
             with self.lock, torch.no_grad():
                 probs, _ = self._network(state)
             action = (probs * self._atoms).sum(-1).argmax(dim=-1)
@@ -219,13 +219,13 @@ class RainbowAgent(BaseAgent):
         t0 = time.time()
         logger.store(TrainEpRet=0, Loss=0)
 
-        while self.total_steps < self.cfg.max_steps:
+        while self.total_steps < cfg.max_steps:
             self.step()
 
-            if self.total_steps % self.cfg.save_interval == 0:
-                self.save(f'{self.cfg.log_dir}/{self.total_steps}')
+            if self.total_steps % cfg.save_interval == 0:
+                self.save(f'{cfg.ckpt_dir}/{self.total_steps}')
 
-            if self.total_steps % self.cfg.log_interval == 0:
+            if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
                 logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))

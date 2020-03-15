@@ -9,7 +9,7 @@ from src.deepq.deepq import RainbowAgent
 
 class Config:
     game = 'Breakout'
-    seed = 1
+    seed = 0
 
     dueling = True
     double = True
@@ -48,6 +48,7 @@ class Config:
 
     ckpt = ""
     log_dir = ""
+    play = False
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
@@ -59,6 +60,7 @@ if __name__ == '__main__':
 
     if len(args.log_dir) == 0:
         args.log_dir = f'log/rainbow-{args.game}-{args.seed}/'
+        args.ckpt_dir = f'ckpt/rainbow-{args.game}-{args.seed}/'
 
     if len(args.ckpt) > 0:
         args.log_dir = f'log/rainbow-{args.game}-{args.seed}-eval/'
@@ -70,7 +72,7 @@ if __name__ == '__main__':
     agent = RainbowAgent(cfg=args)
     agent.logger.save_config(args)
 
-    if len(args.ckpt) == 0:
+    if not args.play:
         agent.run()
     else:
         agent.load(args.ckpt)
