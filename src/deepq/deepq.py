@@ -15,8 +15,9 @@ from src.common.logger import EpochLogger
 from src.deepq.model import C51Net
 
 class RainbowActor(AsyncActor):
-    def __init__(self, cfg):
+    def __init__(self, cfg, lock):
         super(RainbowActor, self).__init__(cfg)
+        self.lock = lock
         self.start()
 
     def _set_up(self):
@@ -33,7 +34,7 @@ class RainbowActor(AsyncActor):
 
         cfg = self.cfg
         state = torch.from_numpy(self._state_normalizer([self._state])).float().cuda()
-        with mp.Lock(), torch.no_grad():
+        with self.lock, torch.no_grad():
             probs, _ = self._network(state)
 
         q_values = (probs * self._atoms).sum(-1)
@@ -60,7 +61,8 @@ class RainbowActor(AsyncActor):
 class RainbowAgent(BaseAgent):
     def __init__(self, cfg):
         super(RainbowAgent, self).__init__(cfg)
-        self.actor = RainbowActor(cfg)
+        self.lock = mp.Lock()
+        self.actor = RainbowActor(cfg, self.lock)
         self.test_env = make_env(cfg.game, f'{cfg.log_dir}/test', True)
         self.logger = EpochLogger(cfg.log_dir)
         self.replay = AsyncReplayBuffer(
@@ -81,10 +83,9 @@ class RainbowAgent(BaseAgent):
             in_channels=cfg.history_length
         ).cuda()
 
-        self.target_network = copy.deepcopy(self.network)
         self.network.train()
         self.network.share_memory()
-
+        self.target_network = copy.deepcopy(self.network)
         self.actor.set_network(self.network)
 
         self.optimizer = torch.optim.Adam(
@@ -135,6 +136,8 @@ class RainbowAgent(BaseAgent):
             R = 0
             for *_, r, d in reversed(self.tracker):
                 R += r + cfg.discount * (1 - d) * R
+
+            done = any([x[-1] for x in self.tracker])
             experiences.append(self.tracker[0][:2] + [R, next_state, done])
 
             if done:
@@ -166,7 +169,7 @@ class RainbowAgent(BaseAgent):
 
                 rewards = tensor(rewards).unsqueeze(-1)
                 terminals = tensor(terminals).unsqueeze(-1)
-                atoms_next = rewards + cfg.discount * (1 - terminals) * self.atoms.view(1, -1)
+                atoms_next = rewards + (cfg.discount ** cfg.nstep) * (1 - terminals) * self.atoms.view(1, -1)
 
                 atoms_next.clamp_(cfg.v_min, cfg.v_max)
                 b = (atoms_next - cfg.v_min) / self.delta_atom
@@ -197,7 +200,7 @@ class RainbowAgent(BaseAgent):
 
             self.optimizer.zero_grad()
             loss.backward()
-            with mp.Lock():
+            with self.lock:
                 self.optimizer.step()
 
             self.logger.store(Loss=loss.item())
