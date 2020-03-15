@@ -73,6 +73,7 @@ if __name__ == '__main__':
     agent.logger.save_config(args)
 
     if not args.play:
+        mkdir(args.ckpt_dir)
         agent.run()
     else:
         agent.load(args.ckpt)
