@@ -85,9 +85,6 @@ class RainbowAgent(BaseAgent):
         if cfg.noisy:
             self.network.train()
             self.target_network.train()
-        else:
-            self.network.eval()
-            self.target_network.eval()
 
         self.actor.set_network(self.network)
 
@@ -140,8 +137,8 @@ class RainbowAgent(BaseAgent):
             for *_, r, d in reversed(self.tracker):
                 R += r + cfg.discount * (1 - d) * R
 
-            done = any([x[-1] for x in self.tracker])
-            experiences.append(self.tracker[0][:2] + [R, next_state, done])
+            D = any([x[-1] for x in self.tracker])
+            experiences.append(self.tracker[0][:2] + [R, next_state, D])
 
             if done:
                 self.tracker.clear()
