@@ -34,20 +34,15 @@ class RainbowActor(AsyncActor):
 
         cfg = self.cfg
         state = torch.from_numpy(self._state_normalizer([self._state])).float().cuda()
-        with self.lock, torch.no_grad():
-            probs, _ = self._network(state)
 
-        q_values = (probs * self._atoms).sum(-1)
-        q_values = q_values.flatten().cpu().numpy()
-
-        if self.cfg.noisy:
-            action = np.argmax(q_values)
+        if  self.cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
+            with self.lock, torch.no_grad():
+                probs, _ = self._network(state)
+            action = (probs * self._atoms).sum(-1).argmax(dim=-1)
+            action = action.item()
         else:
-            if self._total_steps < cfg.exploration_steps \
-                    or np.random.rand() < self._random_action_prob():
-                action = np.random.randint(0, len(q_values))
-            else:
-                action = np.argmax(q_values)
+            action = self._env.action_space.sample()
+
 
         next_state, reward, done, info = self._env.step(action)
         entry = [self._state, action, reward, next_state, int(done), info]
