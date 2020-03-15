@@ -7,7 +7,6 @@ from pathlib import Path
 from gym import wrappers
 from src.common.atari_wrapper import make_atari, wrap_deepmind
 from src.common.monitor import Monitor
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -19,7 +18,6 @@ def tensor(x):
     x = torch.tensor(x, dtype=torch.float32).cuda()
     return x
 
-
 def close_obj(obj):
     if hasattr(obj, 'close'):
         obj.close()
@@ -30,19 +28,19 @@ def set_thread(n):
     torch.set_num_threads(n)
 
 
-def make_env(game, log_prefix, record_video=False):
+def make_env(game, log_prefix, record_video=False, seed=1234, max_episode_steps=108000):
     def trunk():
-        env = make_atari(f'{game}NoFrameskip-v4')
-        env = wrap_deepmind(env, frame_stack=True)
+        env = make_atari(f'{game}NoFrameskip-v4', max_episode_steps)
+        env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
+        env = wrap_deepmind(env, episode_life=not record_video, frame_stack=True)
         if record_video:
             env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
-    # env = DummyVecEnv([trunk])
     return trunk()
 
 
-def random_seed(seed=1):
+def random_seed(seed=None):
     random.seed(seed)
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
