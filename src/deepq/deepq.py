@@ -23,7 +23,7 @@ class RainbowActor(AsyncActor):
     def _set_up(self):
         cfg = self.cfg
         self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
-        self._env = make_env(cfg.game, f'{cfg.log_dir}/train', False)
+        self._env = make_env(game=cfg.game, log_prefix=f'{cfg.log_dir}/train', record_video=False, max_episode_steps=cfg.max_episode_steps)
         self._random_action_prob = LinearSchedule(1.0, cfg.min_epsilon, cfg.epsilon_steps)
         self._state_normalizer = ImageNormalizer()
 
@@ -63,7 +63,7 @@ class RainbowAgent(BaseAgent):
         super(RainbowAgent, self).__init__(cfg)
         self.lock = mp.Lock()
         self.actor = RainbowActor(cfg, self.lock)
-        self.test_env = make_env(cfg.game, f'{cfg.log_dir}/test', True)
+        self.test_env = make_env(cfg.game, f'{cfg.log_dir}/test', True, cfg.max_episode_steps)
         self.logger = EpochLogger(cfg.log_dir)
         self.replay = AsyncReplayBuffer(
             buffer_size=cfg.replay_size,
@@ -86,6 +86,14 @@ class RainbowAgent(BaseAgent):
         self.network.train()
         self.network.share_memory()
         self.target_network = copy.deepcopy(self.network)
+
+        if cfg.noisy:
+            self.network.train()
+            self.target_network.train()
+        else:
+            self.network.eval()
+            self.target_network.eval()
+
         self.actor.set_network(self.network)
 
         self.optimizer = torch.optim.Adam(

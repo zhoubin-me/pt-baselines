@@ -4,6 +4,9 @@ import torch.nn.functional as F
 
 import numpy as np
 
+
+'''
+
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, std_init=0.5):
         super(NoisyLinear, self).__init__()
@@ -43,6 +46,43 @@ class NoisyLinear(nn.Module):
         else:
             return F.linear(input, self.weight_mu, self.bias_mu)
 
+'''
+
+class NoisyLinear(nn.Module):
+    def __init__(self, in_size, out_size, sigma=0.5):
+        super(NoisyLinear, self).__init__()
+        self.linear_mu = nn.Linear(in_size, out_size)
+        self.linear_sigma = nn.Linear(in_size, out_size)
+
+        self.register_buffer('noise_w', torch.zeros_like(self.linear_mu.weight))
+        self.register_buffer('noise_b', torch.zeros_like(self.linear_mu.bias))
+
+        self.sigma = sigma
+
+        self.reset_parameters()
+        self.reset_noise()
+
+    def forward(self, x):
+        if self.training:
+            x = F.linear(x,
+                         self.linear_mu.weight + self.linear_sigma.weight * self.noise_w,
+                         self.linear_mu.bias + self.linear_sigma.bias * self.noise_b)
+        else:
+            x = self.linear_mu(x)
+        return x
+
+    def reset_parameters(self):
+        stdv = 1. / np.sqrt(self.linear_mu.weight.size(1))
+        self.linear_mu.weight.data.uniform_(-stdv, stdv)
+        self.linear_mu.bias.data.uniform_(-stdv, stdv)
+
+        self.linear_sigma.weight.data.fill_(self.sigma * stdv)
+        self.linear_sigma.bias.data.fill_(self.sigma * stdv)
+
+    def reset_noise(self, std=None):
+        self.noise_w.data.normal_()
+        self.noise_b.data.normal_()
+
 
 
 class C51Net(nn.Module):
@@ -51,7 +91,7 @@ class C51Net(nn.Module):
         self.num_atoms = num_atoms
         self.action_dim = action_dim
         self.noise_std = noise_std
-        M = NoisyLinear if noisy else nn.Linear
+        FC = NoisyLinear if noisy else nn.Linear
 
         self.convs = nn.Sequential(
             nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
@@ -60,27 +100,38 @@ class C51Net(nn.Module):
             nn.Flatten(),
         )
 
-        self.fc = M(64 * 7 * 7, 512)
-        self.A = M(512, num_atoms * action_dim)
+        self.fc_q = nn.Sequential(
+            FC(64 * 7 * 7, 512), nn.ReLU(),
+            FC(512, num_atoms * action_dim)
+        )
+
         if duel:
-            self.V = M(512, num_atoms)
+            self.fc_v = nn.Sequential(
+                FC(64 * 7 * 7, 512), nn.ReLU(),
+                FC(512, num_atoms)
+            )
         else:
-            self.V = None
+            self.fc_v = None
+
 
     def forward(self, x):
-        phi = self.fc(self.convs(x))
-        a = self.A(phi).view(-1, self.action_dim, self.num_atoms)
-        if self.V is not None:
-            v = self.V(phi)
-            q = v.view(-1, 1, self.num_atoms) + a - a.mean(dim=1, keepdim=True)
-        else:
-            q = a
+        phi = self.convs(x)
+        q = self.fc_q(phi).view(-1, self.action_dim, self.num_atoms)
+
+        if self.fc_v is not None:
+            v = self.fc_v(phi)
+            q = v.view(-1, 1, self.num_atoms) + q - q.mean(dim=1, keepdim=True)
+
         prob = F.softmax(q, dim=-1)
         log_prob = F.log_softmax(q, dim=-1)
         return prob, log_prob
 
     def reset_noise(self, std=None):
         if std is None: std = self.noise_std
-        for name, m in self.named_children():
+        for m in self.modules():
             if isinstance(m, NoisyLinear):
                 m.reset_noise(std)
+
+if __name__ == '__main__':
+    model = C51Net(4, 51, True, 0.5, True)
+    model.reset_noise()
