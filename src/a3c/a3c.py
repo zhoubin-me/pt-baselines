@@ -16,12 +16,13 @@ from src.common.normalizer import SignNormalizer
 from src.common.logger import EpochLogger
 from src.a3c.model import ACNet
 
+
+
 class A3CActor(AsyncActor):
     def __init__(self, cfg, n, lock):
         self.n = n
         self.lock = lock
         super(A3CActor, self).__init__(cfg)
-        self.start()
 
     def _set_up(self):
         cfg = self.cfg
@@ -31,15 +32,21 @@ class A3CActor(AsyncActor):
             False,
             seed=cfg.seed+self.n
         )
+
         self._reward_normalizer = SignNormalizer()
         self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
 
-    def _transition(self):
+    def run(self):
         cfg = self.cfg
+        self._set_up()
 
-        if self._state is None:
-            self._state = self._env.reset()
-            self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
+        while True:
+            op, data = self.__worker_pipe.recv()
+            if op == self.NETWORK:
+                self._network = data
+                self._state = self._env.reset()
+                self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
+                break
 
         while True:
             transitions = []
@@ -98,9 +105,8 @@ class A3CActor(AsyncActor):
                 torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
                 self._optimizer.step()
 
-            if rs is not None: print(f"rank {self.n}, loss {loss.item()}, rt {rs}, steps {steps}")
+            if rs is not None: print(f"rank {self.n}, loss {loss.item()}, rt {rs}, steps {self._total_steps}")
 
-            # return (loss.item(), rs, steps)
 
 
 
@@ -160,37 +166,29 @@ class A3CAgent(BaseAgent):
                     break
         return ret
 
-
-    def step(self):
-
-        for actor in self.actors:
-            data = actor.step()
-            for l, rs, steps in data:
-                if rs is not None: self.logger.store(TrainEpRet=rs)
-                self.logger.store(Loss=l)
-                self.total_steps += steps
-
     def run(self):
 
-        logger = self.logger
-        cfg = self.cfg
+        for actor in self.actors:
+            actor.start()
+        #
+        # logger = self.logger
+        # cfg = self.cfg
 
         # t0 = time.time()
-        logger.store(TrainEpRet=0, Loss=0)
-        self.step()
-
-        while True:
-            test_returns = self.eval_episodes()
-            logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
-            test_tabular = {
-                "Epoch": self.total_steps // cfg.eval_interval,
-                "Steps": self.total_steps,
-                "NumOfEp": len(test_returns),
-                "AverageTestEpRet": np.mean(test_returns),
-                "StdTestEpRet": np.std(test_returns),
-                "MaxTestEpRet": np.max(test_returns),
-                "MinTestEpRet": np.min(test_returns)}
-            logger.dump_test(test_tabular)
+        # logger.store(TrainEpRet=0, Loss=0)
+        #
+        # while True:
+        #     test_returns = self.eval_episodes()
+        #     logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
+        #     test_tabular = {
+        #         "Epoch": self.total_steps // cfg.eval_interval,
+        #         "Steps": self.total_steps,
+        #         "NumOfEp": len(test_returns),
+        #         "AverageTestEpRet": np.mean(test_returns),
+        #         "StdTestEpRet": np.std(test_returns),
+        #         "MaxTestEpRet": np.max(test_returns),
+        #         "MinTestEpRet": np.min(test_returns)}
+        #     logger.dump_test(test_tabular)
         # N = 0
         # while self.total_steps < self.cfg.max_steps:
         #     for _ in range(cfg.log_interval // (cfg.num_actors * cfg.steps_per_transit)):

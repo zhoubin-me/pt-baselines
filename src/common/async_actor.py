@@ -11,7 +11,6 @@ class AsyncActor(mp.Process):
     SPECS = 3
     NETWORK = 4
     CACHE = 5
-    TRANSIT = 6
 
     def __init__(self, cfg):
         mp.Process.__init__(self)
@@ -47,8 +46,6 @@ class AsyncActor(mp.Process):
                 return
             elif op == self.NETWORK:
                 self._network = data
-            elif op == self.TRANSIT:
-                self._transition()
             else:
                 raise NotImplementedError
 
@@ -69,6 +66,3 @@ class AsyncActor(mp.Process):
     def set_network(self, net):
         self.__pipe.send([self.NETWORK, net])
 
-
-    def transit(self):
-        self.__pipe.send([self.TRANSIT, None])
