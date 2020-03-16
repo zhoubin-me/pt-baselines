@@ -207,7 +207,7 @@ class RainbowAgent(BaseAgent):
             if cfg.prioritize:
                 weights, idxes = extras
                 idxes = idxes.int().flatten().tolist()
-                prioritise = error.flatten().tolist()
+                prioritise = (error+1e-8).flatten().tolist()
                 self.replay.update_priorities(idxes, prioritise)
                 loss = (error * weights).mean()
             else:

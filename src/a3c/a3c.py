@@ -58,6 +58,8 @@ class A3CActor(AsyncActor):
             steps += 1
 
 
+            transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
+
             if done:
                 self._state = self._env.reset()
                 self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
@@ -66,13 +68,14 @@ class A3CActor(AsyncActor):
                 break
             else:
                 self._state = next_state
-                self._hx, self._cx = hx, cx
+                self._hx, self._cx = hx.detach(), cx.detach()
                 s = torch.from_numpy(self._state).unsqueeze(0)
 
                 with self.lock, torch.no_grad():
-                    R, _, _ = self._network((s, (self._hx, self._cx)))
+                    v, _, _ = self._network((s, (self._hx, self._cx)))
+                    R = v.detach()
 
-            transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
+
 
 
         GAE = torch.zeros(1, 1)
@@ -88,6 +91,7 @@ class A3CActor(AsyncActor):
 
             policy_loss = policy_loss - log_prob * GAE.detach() - cfg.entropy_coef * entropy
             v_prev = v
+
         loss = policy_loss + cfg.value_loss_coef * value_loss
 
 
@@ -97,6 +101,7 @@ class A3CActor(AsyncActor):
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
             self._optimizer.step()
 
+        if rs is not None: print(f"rank {self.n}, loss {loss.item()}, rt {rs}, steps {steps}")
 
         return (loss.item(), rs, steps)
 
@@ -164,7 +169,7 @@ class A3CAgent(BaseAgent):
         for actor in self.actors:
             data = actor.step()
             for l, rs, steps in data:
-                self.logger.store(TrainEpRet=rs)
+                if rs is not None: self.logger.store(TrainEpRet=rs)
                 self.logger.store(Loss=l)
                 self.total_steps += steps
 
