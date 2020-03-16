@@ -42,7 +42,7 @@ class A3CActor(AsyncActor):
         cfg = self.cfg
 
         transitions = []
-        done, R = False, torch.zeros(1, 1)
+        done, R, rs, steps = False, torch.zeros(1, 1), None, 0
         for step in range(cfg.steps_per_transit):
             s = torch.from_numpy(self._state).unsqueeze(0)
             with self.lock:
@@ -52,13 +52,16 @@ class A3CActor(AsyncActor):
             entropy = 0 - (prob * log_prob).sum(-1, keepdim=True)
             action = prob.multinomial(1)
             log_prob = log_prob[:, action]
-            next_state, reward, done, _ = self._env.step(action.item())
+            next_state, reward, done, info  = self._env.step(action.item())
             self._total_steps += 1
+            steps += 1
 
 
             if done:
                 self._state = self._env.reset()
                 self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
+                if 'episode' in info:
+                    rs = info['episode']['r']
                 break
             else:
                 self._state = next_state
@@ -85,7 +88,8 @@ class A3CActor(AsyncActor):
             policy_loss = policy_loss - log_prob * GAE.detach() - cfg.entropy_coef * entropy
             v_prev = v
         loss = policy_loss + cfg.value_loss_coef * value_loss
-        return loss
+
+        return (loss, rs, steps)
 
 
 
@@ -126,29 +130,38 @@ class A3CAgent(BaseAgent):
             close_obj(actor)
 
     def eval_step(self, state):
-        self.state_normalizer.set_read_only()
-        if np.random.rand() > self.cfg.test_epsilon:
-            state = torch.from_numpy(self.state_normalizer([state])).float().cuda()
-            prob, _ = self.network(state)
-            q = (prob * self.atoms).sum(-1)
-            action = np.argmax(q.tolist())
-        else:
-            action = self.test_env.action_space.sample()
-        self.state_normalizer.unset_read_only()
-        return action
+        s = torch.from_numpy(state).unsqueeze(0)
+        with torch.no_grad():
+            _, pi, (self.hx, self.cx) = self.network((s, (self.hx, self.cx)))
+        action = pi.argmax(dim=-1)
+        return action.item()
+
+    def eval_episode(self):
+        env = self.test_env
+        state = env.reset()
+        self.hx, self.cx = torch.zeros(1, 256), torch.zeros(1, 256)
+        while True:
+            action = self.eval_step(state)
+            state, reward, done, info = env.step(action)
+            if isinstance(info, dict):
+                if 'episode' in info:
+                    ret = info['episode']['r']
+                    break
+        return ret
+
 
     def step(self):
 
         for actor in self.actors:
             loss = actor.step()
-            for l in loss:
+            for l, rs, steps in loss:
                 self.optimizer.zero_grad()
                 l.backward()
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
                 self.optimizer.step()
-
-
-
+                self.logger.store(TrainEpRet=rs)
+                self.logger.store(Loss=l.item())
+                self.total_steps += steps
 
     def run(self):
 
@@ -157,24 +170,25 @@ class A3CAgent(BaseAgent):
 
         t0 = time.time()
         logger.store(TrainEpRet=0, Loss=0)
-
+        N = 0
         while self.total_steps < self.cfg.max_steps:
-            self.step()
+            for _ in range(cfg.log_interval // (cfg.num_actors * cfg.steps_per_transit)):
+                self.step()
+                N += 1
 
-            if self.total_steps % self.cfg.save_interval == 0:
+            logger.log_tabular('TotalEnvInteracts', self.total_steps)
+            logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
+            logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
+            logger.log_tabular('TrainEpRet', with_min_and_max=True)
+            logger.log_tabular('Loss', average_only=True)
+            logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
+            t0 = time.time()
+            logger.dump_tabular(self.total_steps)
+
+            if N % (cfg.save_interval // cfg.log_interval) == 0:
                 self.save(f'{self.cfg.log_dir}/{self.total_steps}')
 
-            if self.total_steps % self.cfg.log_interval == 0:
-                logger.log_tabular('TotalEnvInteracts', self.total_steps)
-                logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
-                logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
-                logger.log_tabular('TrainEpRet', with_min_and_max=True)
-                logger.log_tabular('Loss', average_only=True)
-                logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
-                t0 = time.time()
-                logger.dump_tabular(self.total_steps)
-
-            if self.total_steps % cfg.eval_interval == 0:
+            if N % (cfg.eval_interval // cfg.log_interval) == 0:
                 test_returns = self.eval_episodes()
                 logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
                 test_tabular = {
