@@ -35,6 +35,7 @@ class Config:
     save_interval = 1000000
     max_episode_steps = 108000
     max_steps = int(4e7)
+    eval_episodes = 10
 
     ckpt = ""
     log_dir = ""

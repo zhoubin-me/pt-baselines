@@ -34,9 +34,6 @@ class A3CActor(AsyncActor):
         self._reward_normalizer = SignNormalizer()
         self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
 
-    def infinite_transit(self):
-        self.__pipe.send([self.INF, None])
-
     def _transition(self):
         cfg = self.cfg
 
@@ -60,22 +57,25 @@ class A3CActor(AsyncActor):
             self._total_steps += 1
             steps += 1
 
+
+            transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
+
             if done:
                 self._state = self._env.reset()
                 self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
                 if 'episode' in info:
                     rs = info['episode']['r']
-                    print(f'rank {self.n}, EpR {rs}')
                 break
             else:
                 self._state = next_state
-                self._hx, self._cx = hx, cx
+                self._hx, self._cx = hx.detach(), cx.detach()
                 s = torch.from_numpy(self._state).unsqueeze(0)
 
                 with self.lock, torch.no_grad():
-                    R, _, _ = self._network((s, (self._hx, self._cx)))
+                    v, _, _ = self._network((s, (self._hx, self._cx)))
+                    R = v.detach()
 
-            transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
+
 
 
         GAE = torch.zeros(1, 1)
@@ -101,6 +101,9 @@ class A3CActor(AsyncActor):
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
             self._optimizer.step()
 
+        if rs is not None: print(f"rank {self.n}, loss {loss.item()}, rt {rs}, steps {steps}")
+
+        return (loss.item(), rs, steps)
 
 
 
@@ -126,6 +129,10 @@ class A3CAgent(BaseAgent):
         self.network.train()
         self.network.share_memory()
 
+        self.optimizer = torch.optim.Adam(
+            self.network.parameters(),
+            cfg.adam_lr,
+        )
 
         for actor in self.actors:
             actor.set_network(self.network)
@@ -158,47 +165,51 @@ class A3CAgent(BaseAgent):
 
 
     def step(self):
-        pass
+
+        for actor in self.actors:
+            data = actor.step()
+            for l, rs, steps in data:
+                if rs is not None: self.logger.store(TrainEpRet=rs)
+                self.logger.store(Loss=l)
+                self.total_steps += steps
 
     def run(self):
-        for actor in self.actors:
-            actor.infinite_transit()
 
-        # logger = self.logger
-        # cfg = self.cfg
-        #
-        # t0 = time.time()
-        # logger.store(TrainEpRet=0, Loss=0)
-        # N = 0
-        # while self.total_steps < self.cfg.max_steps:
-        #     for _ in range(cfg.log_interval // (cfg.num_actors * cfg.steps_per_transit)):
-        #         self.step()
-        #         N += 1
-        #
-        #     logger.log_tabular('TotalEnvInteracts', self.total_steps)
-        #     logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
-        #     logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
-        #     logger.log_tabular('TrainEpRet', with_min_and_max=True)
-        #     logger.log_tabular('Loss', average_only=True)
-        #     logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
-        #     t0 = time.time()
-        #     logger.dump_tabular(self.total_steps)
-        #
-        #     if N % (cfg.save_interval // cfg.log_interval) == 0:
-        #         self.save(f'{self.cfg.log_dir}/{self.total_steps}')
-        #
-        #     if N % (cfg.eval_interval // cfg.log_interval) == 0:
-        #         test_returns = self.eval_episodes()
-        #         logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
-        #         test_tabular = {
-        #             "Epoch": self.total_steps // cfg.eval_interval,
-        #             "Steps": self.total_steps,
-        #             "NumOfEp": len(test_returns),
-        #             "AverageTestEpRet": np.mean(test_returns),
-        #             "StdTestEpRet": np.std(test_returns),
-        #             "MaxTestEpRet": np.max(test_returns),
-        #             "MinTestEpRet": np.min(test_returns)}
-        #         logger.dump_test(test_tabular)
-        #
-        # self.close()
+        logger = self.logger
+        cfg = self.cfg
+
+        t0 = time.time()
+        logger.store(TrainEpRet=0, Loss=0)
+        N = 0
+        while self.total_steps < self.cfg.max_steps:
+            for _ in range(cfg.log_interval // (cfg.num_actors * cfg.steps_per_transit)):
+                self.step()
+                N += 1
+
+            logger.log_tabular('TotalEnvInteracts', self.total_steps)
+            logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
+            logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
+            logger.log_tabular('TrainEpRet', with_min_and_max=True)
+            logger.log_tabular('Loss', average_only=True)
+            logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
+            t0 = time.time()
+            logger.dump_tabular(self.total_steps)
+
+            if N % (cfg.save_interval // cfg.log_interval) == 0:
+                self.save(f'{self.cfg.log_dir}/{self.total_steps}')
+
+            if N % (cfg.eval_interval // cfg.log_interval) == 0:
+                test_returns = self.eval_episodes()
+                logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
+                test_tabular = {
+                    "Epoch": self.total_steps // cfg.eval_interval,
+                    "Steps": self.total_steps,
+                    "NumOfEp": len(test_returns),
+                    "AverageTestEpRet": np.mean(test_returns),
+                    "StdTestEpRet": np.std(test_returns),
+                    "MaxTestEpRet": np.max(test_returns),
+                    "MinTestEpRet": np.min(test_returns)}
+                logger.dump_test(test_tabular)
+
+        self.close()
 
