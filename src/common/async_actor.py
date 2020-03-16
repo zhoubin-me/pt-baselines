@@ -11,6 +11,7 @@ class AsyncActor(mp.Process):
     SPECS = 3
     NETWORK = 4
     CACHE = 5
+    INF = 6
 
     def __init__(self, cfg):
         mp.Process.__init__(self)
@@ -46,6 +47,9 @@ class AsyncActor(mp.Process):
                 return
             elif op == self.NETWORK:
                 self._network = data
+            elif op == self.INF:
+                while True:
+                    self._transition()
             else:
                 raise NotImplementedError
 
