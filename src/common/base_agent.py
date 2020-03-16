@@ -23,9 +23,9 @@ class BaseAgent:
             pickle.dump(self.state_normalizer.state_dict(), f)
 
     def load(self, filename):
-        state_dict = torch.load('%s.model' % filename, map_location=lambda storage, loc: storage)
+        state_dict = torch.load(filename, map_location=lambda storage, loc: storage)
         self.network.load_state_dict(state_dict)
-        with open('%s.stats' % (filename), 'rb') as f:
+        with open('%s.stats' % (filename[:-6]), 'rb') as f:
             self.state_normalizer.load_state_dict(pickle.load(f))
 
     def eval_step(self, state):

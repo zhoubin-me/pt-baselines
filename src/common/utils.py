@@ -2,10 +2,11 @@ import torch
 import numpy as np
 import random
 import os
+import gym
 from pathlib import Path
 
 from gym import wrappers
-from src.common.atari_wrapper import make_atari, wrap_deepmind
+from src.common.atari_wrapper import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit
 from src.common.monitor import Monitor
 
 def mkdir(path):
@@ -28,7 +29,15 @@ def set_thread(n):
     torch.set_num_threads(n)
 
 
-def make_env(game, log_prefix, record_video=False, seed=1234, max_episode_steps=108000):
+def random_seed(seed=None):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.manual_seed(np.random.randint(int(1e6)))
+
+
+def make_deepq_env(game, log_prefix, record_video=False, seed=1234, max_episode_steps=108000):
     def trunk():
         env = make_atari(f'{game}NoFrameskip-v4', max_episode_steps)
         env.seed(seed)
@@ -40,9 +49,16 @@ def make_env(game, log_prefix, record_video=False, seed=1234, max_episode_steps=
     return trunk()
 
 
-def random_seed(seed=None):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.manual_seed(np.random.randint(int(1e6)))
+def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000, seed=1234):
+    def trunk():
+        env = gym.make(f'{game}Deterministic-v4')
+        if max_episode_steps is not None:
+            env = TimeLimit(env, max_episode_steps)
+        env.seed(seed)
+        env = AtariRescale42x42(env)
+        env = NormalizedEnv(env)
+        env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
+        if record_video:
+            env = wrappers.Monitor(env, f'{log_prefix}', force=True)
+        return env
+    return trunk()
