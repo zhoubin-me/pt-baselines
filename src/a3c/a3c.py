@@ -20,10 +20,11 @@ from src.a3c.model import ACNet
 
 class A3CActor(mp.Process):
     NETWORK = 4
-    def __init__(self, cfg, n, lock):
+    def __init__(self, cfg, n, lock, counter):
         super(A3CActor, self).__init__()
         self.n = n
         self.lock = lock
+        self.counter = counter
         self.cfg = cfg
         self.__pipe, self.__worker_pipe = mp.Pipe()
 
@@ -71,6 +72,10 @@ class A3CActor(mp.Process):
                 action = prob.multinomial(1)
                 log_prob = log_prob[:, action]
                 next_state, reward, done, info  = self._env.step(action.item())
+
+                with self.lock:
+                    self.counter.value += 1
+
                 self._total_steps += 1
 
                 transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
@@ -122,7 +127,9 @@ class A3CAgent(BaseAgent):
     def __init__(self, cfg):
         super(A3CAgent, self).__init__(cfg)
         self.lock = mp.Lock()
-        self.actors = [A3CActor(cfg, n, self.lock) for n in range(cfg.num_actors)]
+        self.counter = mp.Value('i', 0)
+
+        self.actors = [A3CActor(cfg, n, self.lock, self.counter) for n in range(cfg.num_actors)]
         self.test_env = make_a3c_env(
             cfg.game,
             f'{cfg.log_dir}/test',
@@ -177,9 +184,10 @@ class A3CAgent(BaseAgent):
         for actor in self.actors:
             actor.start()
 
-
         for actor in self.actors:
             actor.set_network(self.network)
+
+
 
         logger = self.logger
         cfg = self.cfg
@@ -187,24 +195,20 @@ class A3CAgent(BaseAgent):
 
         while True:
             test_returns = self.eval_episodes()
-            total_steps = sum([actor._total_steps for actor in self.actors])
             logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
             test_tabular = {
                 "Epoch": self.total_steps // cfg.eval_interval,
-                "Steps": total_steps,
-                "Speed": total_steps / (time.time() - t0),
+                "Steps": self.counter.value,
+                "Speed": self.counter.value / (time.time() - t0),
                 "NumOfEp": len(test_returns),
                 "AverageTestEpRet": np.mean(test_returns),
                 "StdTestEpRet": np.std(test_returns),
                 "MaxTestEpRet": np.max(test_returns),
                 "MinTestEpRet": np.min(test_returns)}
             logger.dump_test(test_tabular)
-            t0 = time.time()
 
         for actor in self.actors:
             actor.join()
-
-
 
         #
         # while True:
