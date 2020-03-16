@@ -62,7 +62,6 @@ class A3CActor(mp.Process):
 
         while True:
             transitions = []
-            done, R, rs, steps = False, torch.zeros(1, 1), None, 0
             for step in range(cfg.steps_per_transit):
                 s = torch.from_numpy(self._state).unsqueeze(0)
                 v, pi, (hx, cx) = self._network((s, (self._hx, self._cx)))
@@ -88,17 +87,23 @@ class A3CActor(mp.Process):
                     break
                 else:
                     self._state = next_state
-                    self._hx, self._cx = hx.detach(), cx.detach()
+                    self._hx, self._cx = hx, cx
+
+
+            if done:
+                R = torch.zeros()
+            else:
+                with torch.no_grad():
                     s = torch.from_numpy(self._state).unsqueeze(0)
+                    v_, _, _ = self._network((s, (self._hx, self._cx)))
+                    R = v_.detach()
 
-                    with torch.no_grad():
-                        v, _, _ = self._network((s, (self._hx, self._cx)))
-                        R = v.detach()
-
+                self._hx = self._hx.detach()
+                self._cx = self._cx.detach()
 
             GAE = torch.zeros(1, 1)
-            value_loss, policy_loss, v_prev = 0, 0, R
-            for idx, (v, log_prob, reward, entropy) in enumerate(reversed(transitions)):
+            value_loss, policy_loss, gae, v_prev = 0, 0, torch.zeros(1, 1), R
+            for v, log_prob, reward, entropy in reversed(transitions):
                 R = cfg.discount * R + reward
                 advantage = R - v
 
