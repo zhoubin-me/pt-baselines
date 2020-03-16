@@ -64,8 +64,7 @@ class A3CActor(mp.Process):
             done, R, rs, steps = False, torch.zeros(1, 1), None, 0
             for step in range(cfg.steps_per_transit):
                 s = torch.from_numpy(self._state).unsqueeze(0)
-                with self.lock:
-                    v, pi, (hx, cx) = self._network((s, (self._hx, self._cx)))
+                v, pi, (hx, cx) = self._network((s, (self._hx, self._cx)))
                 prob = F.softmax(pi, -1)
                 log_prob = F.log_softmax(pi, -1)
                 entropy = 0 - (prob * log_prob).sum(-1, keepdim=True)
@@ -87,7 +86,7 @@ class A3CActor(mp.Process):
                     self._hx, self._cx = hx.detach(), cx.detach()
                     s = torch.from_numpy(self._state).unsqueeze(0)
 
-                    with self.lock, torch.no_grad():
+                    with torch.no_grad():
                         v, _, _ = self._network((s, (self._hx, self._cx)))
                         R = v.detach()
 
@@ -109,11 +108,10 @@ class A3CActor(mp.Process):
             loss = policy_loss + cfg.value_loss_coef * value_loss
 
 
-            with self.lock:
-                self._optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
-                self._optimizer.step()
+            self._optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
+            self._optimizer.step()
 
             if rs is not None: print(f"rank {self.n}, loss {loss.item()}, rt {rs}, steps {self._total_steps}")
 
@@ -147,8 +145,6 @@ class A3CAgent(BaseAgent):
             cfg.adam_lr,
         )
 
-        for actor in self.actors:
-            actor.set_network(self.network)
 
         self.total_steps = 0
 
@@ -180,12 +176,36 @@ class A3CAgent(BaseAgent):
 
         for actor in self.actors:
             actor.start()
-        #
-        # logger = self.logger
-        # cfg = self.cfg
 
-        # t0 = time.time()
-        # logger.store(TrainEpRet=0, Loss=0)
+
+        for actor in self.actors:
+            actor.set_network(self.network)
+
+        logger = self.logger
+        cfg = self.cfg
+        t0 = time.time()
+
+        while True:
+            test_returns = self.eval_episodes()
+            total_steps = sum([actor._total_steps for actor in self.actors])
+            logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
+            test_tabular = {
+                "Epoch": self.total_steps // cfg.eval_interval,
+                "Steps": total_steps,
+                "Speed": total_steps / (time.time() - t0),
+                "NumOfEp": len(test_returns),
+                "AverageTestEpRet": np.mean(test_returns),
+                "StdTestEpRet": np.std(test_returns),
+                "MaxTestEpRet": np.max(test_returns),
+                "MinTestEpRet": np.min(test_returns)}
+            logger.dump_test(test_tabular)
+            t0 = time.time()
+
+        for actor in self.actors:
+            actor.join()
+
+
+
         #
         # while True:
         #     test_returns = self.eval_episodes()
@@ -218,17 +238,6 @@ class A3CAgent(BaseAgent):
         #         self.save(f'{self.cfg.log_dir}/{self.total_steps}')
         #
         #     if N % (cfg.eval_interval // cfg.log_interval) == 0:
-        #         test_returns = self.eval_episodes()
-        #         logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
-        #         test_tabular = {
-        #             "Epoch": self.total_steps // cfg.eval_interval,
-        #             "Steps": self.total_steps,
-        #             "NumOfEp": len(test_returns),
-        #             "AverageTestEpRet": np.mean(test_returns),
-        #             "StdTestEpRet": np.std(test_returns),
-        #             "MaxTestEpRet": np.max(test_returns),
-        #             "MinTestEpRet": np.min(test_returns)}
-        #         logger.dump_test(test_tabular)
 
         # self.close()
 

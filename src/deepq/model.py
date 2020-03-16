@@ -7,6 +7,7 @@ import numpy as np
 # Copied from Kaixhin/Rainbow
 # https://github.com/Kaixhin/Rainbow/blob/master/model.py
 
+'''
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, std_init=0.5):
@@ -83,7 +84,6 @@ class NoisyLinear(nn.Module):
     def reset_noise(self, std=None):
         self.noise_w.data.normal_()
         self.noise_b.data.normal_()
-'''
 
 
 class C51Net(nn.Module):
