@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class ACNet(nn.Module):
-    def __init__(self, in_channels, num_actions):
+    def __init__(self, in_channels, action_dim):
         super(ACNet, self).__init__()
 
         self.convs = nn.Sequential(
@@ -16,7 +16,7 @@ class ACNet(nn.Module):
 
         self.lstm = nn.LSTMCell(32 * 3 * 3, 256)
         self.fc_v = nn.Linear(256, 1)
-        self.fc_pi = nn.Linear(256, num_actions)
+        self.fc_pi = nn.Linear(256, action_dim)
 
 
     def forward(self, x):
