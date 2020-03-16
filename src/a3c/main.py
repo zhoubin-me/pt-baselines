@@ -33,6 +33,7 @@ class Config:
     log_interval = 10000
     eval_interval = 100000
     save_interval = 1000000
+    max_episode_steps = 108000
     max_steps = int(4e7)
 
     ckpt = ""

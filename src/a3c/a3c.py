@@ -17,7 +17,7 @@ from src.common.logger import EpochLogger
 from src.a3c.model import ACNet
 
 class A3CActor(AsyncActor):
-    def __init__(self, cfg, lock, n):
+    def __init__(self, cfg, n, lock):
         self.n = n
         self.lock = lock
         super(A3CActor, self).__init__(cfg)
@@ -32,21 +32,22 @@ class A3CActor(AsyncActor):
             seed=cfg.seed+self.n
         )
         self._reward_normalizer = SignNormalizer()
-        self._optimizer = None
+        self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
 
     def _transition(self):
+        cfg = self.cfg
+
         if self._state is None:
             self._state = self._env.reset()
-            self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
+            self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
 
-        cfg = self.cfg
 
         transitions = []
         done, R, rs, steps = False, torch.zeros(1, 1), None, 0
         for step in range(cfg.steps_per_transit):
             s = torch.from_numpy(self._state).unsqueeze(0)
             with self.lock:
-                v, pi, (hx, cx) = self._network((s, (self.hx, self.cx)))
+                v, pi, (hx, cx) = self._network((s, (self._hx, self._cx)))
             prob = F.softmax(pi, -1)
             log_prob = F.log_softmax(pi, -1)
             entropy = 0 - (prob * log_prob).sum(-1, keepdim=True)
@@ -69,14 +70,14 @@ class A3CActor(AsyncActor):
                 s = torch.from_numpy(self._state).unsqueeze(0)
 
                 with self.lock, torch.no_grad():
-                    R, _, _ = self._network(s, (self._hx, self._cx))
+                    R, _, _ = self._network((s, (self._hx, self._cx)))
 
             transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
 
 
         GAE = torch.zeros(1, 1)
         value_loss, policy_loss, v_prev = 0, 0, R
-        for idx, v, log_prob, reward, entropy in enumerate(reversed(transitions)):
+        for idx, (v, log_prob, reward, entropy) in enumerate(reversed(transitions)):
             R = cfg.discount * R + reward
             advantage = R - v
 
@@ -89,7 +90,15 @@ class A3CActor(AsyncActor):
             v_prev = v
         loss = policy_loss + cfg.value_loss_coef * value_loss
 
-        return (loss, rs, steps)
+
+        with self.lock:
+            self._optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
+            self._optimizer.step()
+
+
+        return (loss.item(), rs, steps)
 
 
 
@@ -153,14 +162,10 @@ class A3CAgent(BaseAgent):
     def step(self):
 
         for actor in self.actors:
-            loss = actor.step()
-            for l, rs, steps in loss:
-                self.optimizer.zero_grad()
-                l.backward()
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
-                self.optimizer.step()
+            data = actor.step()
+            for l, rs, steps in data:
                 self.logger.store(TrainEpRet=rs)
-                self.logger.store(Loss=l.item())
+                self.logger.store(Loss=l)
                 self.total_steps += steps
 
     def run(self):
