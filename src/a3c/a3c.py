@@ -18,11 +18,19 @@ from src.a3c.model import ACNet
 
 
 
-class A3CActor(AsyncActor):
+class A3CActor(mp.Process):
+    NETWORK = 4
     def __init__(self, cfg, n, lock):
+        super(A3CActor, self).__init__()
         self.n = n
         self.lock = lock
-        super(A3CActor, self).__init__(cfg)
+        self.cfg = cfg
+        self.__pipe, self.__worker_pipe = mp.Pipe()
+
+        self._state = None
+        self._env = None
+        self._network = None
+        self._total_steps = 0
 
     def _set_up(self):
         cfg = self.cfg
@@ -35,6 +43,9 @@ class A3CActor(AsyncActor):
 
         self._reward_normalizer = SignNormalizer()
         self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
+
+    def set_network(self, net):
+        self.__pipe.send([self.NETWORK, net])
 
     def run(self):
         cfg = self.cfg
@@ -62,7 +73,6 @@ class A3CActor(AsyncActor):
                 log_prob = log_prob[:, action]
                 next_state, reward, done, info  = self._env.step(action.item())
                 self._total_steps += 1
-                steps += 1
 
                 transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
 
