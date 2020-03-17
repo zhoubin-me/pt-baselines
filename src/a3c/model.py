@@ -29,7 +29,7 @@ def weights_init(m):
 
 
 class ACNet(torch.nn.Module):
-    def __init__(self, num_inputs, action_dim):
+    def __init__(self, num_inputs, action_space):
         super(ACNet, self).__init__()
         self.conv1 = nn.Conv2d(num_inputs, 32, 3, stride=2, padding=1)
         self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
@@ -38,8 +38,9 @@ class ACNet(torch.nn.Module):
 
         self.lstm = nn.LSTMCell(32 * 3 * 3, 256)
 
+        num_outputs = action_space.n
         self.critic_linear = nn.Linear(256, 1)
-        self.actor_linear = nn.Linear(256, action_dim)
+        self.actor_linear = nn.Linear(256, num_outputs)
 
         self.apply(weights_init)
         self.actor_linear.weight.data = normalized_columns_initializer(

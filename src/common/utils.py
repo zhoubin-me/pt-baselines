@@ -49,16 +49,10 @@ def make_deepq_env(game, log_prefix, record_video=False, seed=1234, max_episode_
     return trunk()
 
 
-def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000, seed=1234):
+def make_a3c_env(game):
     def trunk():
         env = gym.make(f'{game}Deterministic-v4')
-        if max_episode_steps is not None:
-            env = TimeLimit(env, max_episode_steps)
-        env.seed(seed)
         env = AtariRescale42x42(env)
         env = NormalizedEnv(env)
-        env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        if record_video:
-            env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
     return trunk()

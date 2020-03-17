@@ -3,45 +3,35 @@ import argparse
 import torch.multiprocessing as mp
 import numpy as np
 
-from src.common.utils import set_thread, random_seed, mkdir
-from src.a3c.a3c import A3CAgent
+from src.common.utils import set_thread, random_seed, make_a3c_env
+from src.a3c.a3c import train, test
+from src.a3c.model import ACNet
 import os
 
 class Config:
     game = 'Pong'
     seed = 0
 
-    dueling = True
-    double = True
-    prioritize = False
-    noisy = False
-
-    num_actors = 16
-
+    num_processes = 16
+    num_steps = 20
 
     steps_per_transit = 20
-    discount = 0.99
-    batch_size = 32
-    adam_lr = 0.001
+    gamma = 0.99
+    lr = 0.0001
 
-    gae_coef = 1.0
+    gae_lambda = 1.0
     entropy_coef = 0.01
     value_loss_coef = 0.5
     max_grad_norm = 50
 
-    log_interval = 10000
-    eval_interval = 100000
-    save_interval = 1000000
-    max_episode_length = 108000
-    max_episode_steps = 108000
-    max_steps = int(4e7)
-    eval_episodes = 10
+    max_episode_length = 1000000
 
     ckpt = ""
     log_dir = ""
     play = False
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn', force=True)
     os.environ['OMP_NUM_THREADS'] = '1'
     os.environ['CUDA_VISIBLE_DEVICES'] = ""
 
@@ -52,27 +42,30 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
 
-    if len(args.log_dir) == 0:
-        args.log_dir = f'log/a3c-{args.game}-{args.seed}/'
-        args.ckpt_dir = f'ckpt/a3c-{args.game}-{args.seed}/'
-
-    if len(args.ckpt) > 0:
-        args.log_dir = f'log/a3c-{args.game}-{args.seed}-eval/'
 
     random_seed(args.seed)
     set_thread(1)
 
-    mkdir(args.log_dir)
-    agent = A3CAgent(cfg=args)
-    # agent.logger.save_config(args)
+    env = make_a3c_env(args.game)
+    shared_model = ACNet(
+        env.observation_space.shape[0], env.action_space)
+    shared_model.share_memory()
 
-    if not args.play:
-        mkdir(args.ckpt_dir)
-        agent.run()
-    else:
-        agent.load(args.ckpt)
-        print(f"Running {args.eval_episodes} episodes")
-        returns = agent.eval_episodes()
-        print(f"Returns: {returns}")
-        print(f"Max: {np.max(returns)}\t Min: {np.min(returns)}\t Std: {np.std(returns)}")
+    optimizer = None
+
+    processes = []
+
+    counter = mp.Value('i', 0)
+    lock = mp.Lock()
+
+    p = mp.Process(target=test, args=(args.num_processes, args, shared_model, counter))
+    p.start()
+    processes.append(p)
+
+    for rank in range(0, args.num_processes):
+        p = mp.Process(target=train, args=(rank, args, shared_model, counter, lock, optimizer))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
 
