@@ -3,9 +3,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 import time
 
+from collections import deque
+
 from src.common.utils import make_a3c_env
 from src.a3c.model import ACNet
-
 
 def ensure_shared_grads(model, shared_model):
     for param, shared_param in zip(model.parameters(),
