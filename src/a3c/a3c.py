@@ -52,6 +52,7 @@ class A3CActor(mp.Process):
         cfg = self.cfg
         self._set_up()
 
+
         while True:
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
@@ -62,6 +63,7 @@ class A3CActor(mp.Process):
 
         while True:
             transitions = []
+            done = False
             for step in range(cfg.steps_per_transit):
                 s = torch.from_numpy(self._state).unsqueeze(0)
                 v, pi, (hx, cx) = self._network((s, (self._hx, self._cx)))
@@ -80,26 +82,28 @@ class A3CActor(mp.Process):
                 transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
 
                 if done:
-                    self._state = self._env.reset()
-                    self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
-                    if 'episode' in info:
-                        rs = info['episode']['r']
                     break
-                else:
-                    self._state = next_state
-                    self._hx, self._cx = hx, cx
+
+                self._state = next_state
+                self._hx, self._cx = hx, cx
 
 
             if done:
-                R = torch.zeros()
+                self._state = self._env.reset()
+                self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
+                if 'episode' in info:
+                    rs = info['episode']['r']
+                R = torch.zeros(1, 1)
             else:
+
+                s = torch.from_numpy(self._state).unsqueeze(0)
                 with torch.no_grad():
-                    s = torch.from_numpy(self._state).unsqueeze(0)
                     v_, _, _ = self._network((s, (self._hx, self._cx)))
-                    R = v_.detach()
+                R = v_.detach()
 
                 self._hx = self._hx.detach()
                 self._cx = self._cx.detach()
+                rs = None
 
             GAE = torch.zeros(1, 1)
             value_loss, policy_loss, gae, v_prev = 0, 0, torch.zeros(1, 1), R
@@ -123,7 +127,8 @@ class A3CActor(mp.Process):
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
             self._optimizer.step()
 
-            if rs is not None: print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},\t steps {self._total_steps:10f}")
+            # if rs is not None:
+            print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},\t steps {self._total_steps:10f}")
 
 
 
@@ -152,13 +157,6 @@ class A3CAgent(BaseAgent):
         self.network.train()
         self.network.share_memory()
 
-        self.optimizer = torch.optim.Adam(
-            self.network.parameters(),
-            cfg.adam_lr,
-        )
-
-
-        self.total_steps = 0
 
     def close(self):
         for actor in self.actors:
