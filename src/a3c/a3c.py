@@ -25,6 +25,7 @@ def ensure_shared_grads(model, shared_model):
             return
         shared_param._grad = param.grad
 
+
 class A3CActor(mp.Process):
     NETWORK = 4
     def __init__(self, cfg, n, lock, counter):
@@ -46,6 +47,7 @@ class A3CActor(mp.Process):
             cfg.game,
             f'{cfg.log_dir}/train_{self.n}',
             False,
+            max_episode_steps = cfg.max_episode_steps,
             seed=cfg.seed+self.n
         )
         self._reward_normalizer = SignNormalizer()
@@ -68,13 +70,13 @@ class A3CActor(mp.Process):
         while True:
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
-                self._shared_net = data
-                self._optimizer = torch.optim.Adam(self._shared_net.parameters(), self.cfg.adam_lr)
+                self._network = data
+                self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
                 break
 
         while True:
             # Sync with the shared model
-            self._network.load_state_dict(self._shared_net.state_dict())
+            # self._network.load_state_dict(self._shared_net.state_dict())
             if done:
                 cx = torch.zeros(1, 256)
                 hx = torch.zeros(1, 256)
@@ -143,8 +145,9 @@ class A3CActor(mp.Process):
             loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
-            ensure_shared_grads(self._network, self._shared_net)
-            self._optimizer.step()
+            # ensure_shared_grads(self._network, self._shared_net)
+            with self.lock:
+                self._optimizer.step()
 
             if done:
                 print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},")
@@ -213,7 +216,7 @@ class A3CAgent(BaseAgent):
         logger = self.logger
         t0 = time.time()
 
-        while True:
+        while self.counter.value < self.cfg.max_steps:
             test_returns = self.eval_episodes()
             logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.counter.value)
             test_tabular = {
@@ -230,38 +233,5 @@ class A3CAgent(BaseAgent):
         for actor in self.actors:
             actor.join()
 
-        #
-        # while True:
-        #     test_returns = self.eval_episodes()
-        #     logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
-        #     test_tabular = {
-        #         "Epoch": self.total_steps // cfg.eval_interval,
-        #         "Steps": self.total_steps,
-        #         "NumOfEp": len(test_returns),
-        #         "AverageTestEpRet": np.mean(test_returns),
-        #         "StdTestEpRet": np.std(test_returns),
-        #         "MaxTestEpRet": np.max(test_returns),
-        #         "MinTestEpRet": np.min(test_returns)}
-        #     logger.dump_test(test_tabular)
-        # N = 0
-        # while self.total_steps < self.cfg.max_steps:
-        #     for _ in range(cfg.log_interval // (cfg.num_actors * cfg.steps_per_transit)):
-        #         self.step()
-        #         N += 1
-        #
-        #     logger.log_tabular('TotalEnvInteracts', self.total_steps)
-        #     logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
-        #     logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
-        #     logger.log_tabular('TrainEpRet', with_min_and_max=True)
-        #     logger.log_tabular('Loss', average_only=True)
-        #     logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
-        #     t0 = time.time()
-        #     logger.dump_tabular(self.total_steps)
-        #
-        #     if N % (cfg.save_interval // cfg.log_interval) == 0:
-        #         self.save(f'{self.cfg.log_dir}/{self.total_steps}')
-        #
-        #     if N % (cfg.eval_interval // cfg.log_interval) == 0:
-
-        # self.close()
+        self.close()
 

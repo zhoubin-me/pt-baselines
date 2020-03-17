@@ -11,13 +11,7 @@ class Config:
     game = 'Pong'
     seed = 0
 
-    dueling = True
-    double = True
-    prioritize = False
-    noisy = False
-
     num_actors = 16
-
 
     sgd_update_frequency = 1
     steps_per_transit = 20
