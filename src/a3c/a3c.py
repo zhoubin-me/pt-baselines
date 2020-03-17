@@ -228,7 +228,7 @@ def train(rank, cfg, shared_model, counter, lock, optimizer=None):
     state = env.reset()
     state = torch.from_numpy(state)
     done = True
-
+    rs = 0
     episode_length = 0
     while True:
         # Sync with the shared model
@@ -258,6 +258,7 @@ def train(rank, cfg, shared_model, counter, lock, optimizer=None):
             log_prob = log_prob.gather(1, action)
 
             state, reward, done, _ = env.step(action.numpy())
+            rs += reward
             done = done or episode_length >= cfg.max_episode_length
             reward = max(min(reward, 1), -1)
 
@@ -300,11 +301,16 @@ def train(rank, cfg, shared_model, counter, lock, optimizer=None):
 
         optimizer.zero_grad()
 
-        (policy_loss + cfg.value_loss_coef * value_loss).backward()
+        loss = policy_loss + cfg.value_loss_coef * value_loss
+        loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
 
         ensure_shared_grads(model, shared_model)
         optimizer.step()
+
+        if done:
+            print(f"rank {rank:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},")
+            rs = 0
 
 
 def test(rank, cfg, shared_model, counter):
@@ -379,7 +385,7 @@ class A3CAgent(BaseAgent):
         lock = mp.Lock()
 
         env = create_atari_env(
-            f'{self.game}Deterministic-v4'
+            f'{self.cfg.game}Deterministic-v4'
         )
 
         shared_model = ACNet(
