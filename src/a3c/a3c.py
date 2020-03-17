@@ -2,28 +2,15 @@ import torch
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 
-import copy
 import time
 import numpy as np
-from collections import deque
 
-from src.common.async_actor import AsyncActor
-from src.common.async_replay import AsyncReplayBuffer
 from src.common.base_agent import BaseAgent
 from src.common.utils import close_obj, tensor, make_a3c_env
-from src.common.schedule import LinearSchedule
 from src.common.normalizer import SignNormalizer
 from src.common.logger import EpochLogger
 from src.a3c.model import ACNet
 
-
-
-def ensure_shared_grads(model, shared_model):
-    for param, shared_param in zip(model.parameters(),
-                                   shared_model.parameters()):
-        if shared_param.grad is not None:
-            return
-        shared_param._grad = param.grad
 
 
 class A3CActor(mp.Process):
@@ -75,8 +62,6 @@ class A3CActor(mp.Process):
                 break
 
         while True:
-            # Sync with the shared model
-            # self._network.load_state_dict(self._shared_net.state_dict())
             if done:
                 cx = torch.zeros(1, 256)
                 hx = torch.zeros(1, 256)
@@ -89,7 +74,7 @@ class A3CActor(mp.Process):
             rewards = []
             entropies = []
 
-            for step in range(cfg.steps_per_transit):
+            for step in range(cfg.steps_for_update):
                 episode_length += 1
                 value, logit, (hx, cx) = self._network((state.unsqueeze(0),(hx, cx)))
                 prob = F.softmax(logit, dim=-1)
@@ -145,9 +130,9 @@ class A3CActor(mp.Process):
             loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
-            # ensure_shared_grads(self._network, self._shared_net)
             with self.lock:
                 self._optimizer.step()
+            self._optimizer.step()
 
             if done:
                 print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},")
