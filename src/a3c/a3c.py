@@ -60,6 +60,7 @@ class A3CActor(mp.Process):
                 self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
                 hx, cx = torch.zeros(1, 256), torch.zeros(1, 256)
                 state = self._env.reset()
+                state = torch.from_numpy(state)
                 break
 
         done = True
@@ -82,8 +83,7 @@ class A3CActor(mp.Process):
 
             for step in range(cfg.steps_per_transit):
                 episode_length += 1
-                state = torch.from_numpy(state)
-                value, logit, (hx, cx) = self._network(state.unsqueeze(0),(hx, cx))
+                value, logit, (hx, cx) = self._network((state.unsqueeze(0),(hx, cx)))
                 prob = F.softmax(logit, dim=-1)
                 log_prob = F.log_softmax(logit, dim=-1)
                 entropy = -(log_prob * prob).sum(1, keepdim=True)
@@ -219,7 +219,8 @@ class A3CAgent(BaseAgent):
                 "AverageTestEpRet": np.mean(test_returns),
                 "StdTestEpRet": np.std(test_returns),
                 "MaxTestEpRet": np.max(test_returns),
-                "MinTestEpRet": np.min(test_returns)}
+                "MinTestEpRet": np.min(test_returns),
+                "WallTime(min)": (time.time() - t0) / 60}
             logger.dump_test(test_tabular)
 
         for actor in self.actors:
