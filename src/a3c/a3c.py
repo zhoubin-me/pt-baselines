@@ -18,7 +18,6 @@ from src.a3c.model import ACNet
 
 
 
-
 def ensure_shared_grads(model, shared_model):
     for param, shared_param in zip(model.parameters(),
                                    shared_model.parameters()):
@@ -50,7 +49,7 @@ class A3CActor(mp.Process):
             seed=cfg.seed+self.n
         )
         self._reward_normalizer = SignNormalizer()
-        self._network = ACNet(self._env.observation_space.shape[0], self._env.action_space)
+        self._network = ACNet(self._env.observation_space.shape[0], self._env.action_space.n)
         self._network.train()
 
     def set_network(self, net):

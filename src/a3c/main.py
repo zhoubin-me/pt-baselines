@@ -23,7 +23,7 @@ class Config:
     steps_per_transit = 20
     discount = 0.99
     batch_size = 32
-    adam_lr = 0.001
+    adam_lr = 0.0001
 
     gae_coef = 1.0
     entropy_coef = 0.01
