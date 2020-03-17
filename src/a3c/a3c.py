@@ -43,8 +43,6 @@ class A3CActor(mp.Process):
     def set_network(self, net):
         self.__pipe.send([self.NETWORK, net])
 
-    def set_optimizer(self, optimizer):
-        self.__pipe.send([self.OPTIMIZER, optimizer])
 
     def run(self):
         cfg = self.cfg
@@ -60,9 +58,8 @@ class A3CActor(mp.Process):
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
                 self._network = data
+                self._optimizer = torch.optim.Adam(self._network.parameters(), cfg.adam_lr)
 
-            if op == self.OPTIMIZER:
-                self._optimizer = data
                 break
 
         while True:
@@ -161,13 +158,11 @@ class A3CAgent(BaseAgent):
         )
         self.logger = EpochLogger(cfg.log_dir)
 
-        self.network = ACNet(self.test_env.observation_space[0], self.test_env.action_space.n)
+        self.network = ACNet(self.test_env.observation_space.shape[0], self.test_env.action_space.n)
 
         self.network.train()
         self.network.share_memory()
 
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=cfg.adam_lr)
-        self.optimizer.share_memory()
 
 
     def close(self):
@@ -199,7 +194,6 @@ class A3CAgent(BaseAgent):
         for actor in self.actors:
             actor.start()
             actor.set_network(self.network)
-            actor.set_optimizer(self.optimizer)
 
 
         logger = self.logger
