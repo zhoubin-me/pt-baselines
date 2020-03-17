@@ -161,7 +161,7 @@ class A3CAgent(BaseAgent):
         )
         self.logger = EpochLogger(cfg.log_dir)
 
-        self.network = ACNet(self.test_env.observation_space[0], self.test_env.action_space.n)
+        self.network = ACNet(self.test_env.observation_space.shape[0], self.test_env.action_space.n)
 
         self.network.train()
         self.network.share_memory()
