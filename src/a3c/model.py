@@ -83,6 +83,11 @@ class ACNet(nn.Module):
         self.fc_v = nn.Linear(256, 1)
         self.fc_pi = nn.Linear(256, action_dim)
 
+        # self.lstm.bias_ih.data.fill_(0)
+        # self.lstm.bias_hh.data.fill_(0)
+        # self.fc_v.bias.data.fill_(0)
+        # self.fc_pi.bias.data.fill_(0)
+
 
     def forward(self, x):
         ix, (hx, cx) = x

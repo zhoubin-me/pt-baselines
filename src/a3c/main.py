@@ -17,7 +17,6 @@ class Config:
     discount = 0.99
     batch_size = 32
     adam_lr = 0.0001
-    adam_eps = 0.00015
 
     gae_coef = 1.0
     entropy_coef = 0.01
