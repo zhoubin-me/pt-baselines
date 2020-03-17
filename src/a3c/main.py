@@ -8,7 +8,7 @@ from src.a3c.a3c import A3CAgent
 
 
 class Config:
-    game = 'Breakout'
+    game = 'Pong'
     seed = 0
 
     dueling = True
