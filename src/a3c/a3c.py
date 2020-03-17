@@ -18,6 +18,14 @@ from src.a3c.model import ACNet
 
 
 
+
+def ensure_shared_grads(model, shared_model):
+    for param, shared_param in zip(model.parameters(),
+                                   shared_model.parameters()):
+        if shared_param.grad is not None:
+            return
+        shared_param._grad = param.grad
+
 class A3CActor(mp.Process):
     NETWORK = 4
     def __init__(self, cfg, n, lock, counter):
@@ -41,9 +49,9 @@ class A3CActor(mp.Process):
             False,
             seed=cfg.seed+self.n
         )
-
         self._reward_normalizer = SignNormalizer()
-        self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
+        self._network = ACNet(self._env.observation_space.shape[0], self._env.action_space)
+        self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
 
     def set_network(self, net):
         self.__pipe.send([self.NETWORK, net])
@@ -52,23 +60,21 @@ class A3CActor(mp.Process):
         cfg = self.cfg
         self._set_up()
 
+        state = self._env.reset()
+        state = torch.from_numpy(state)
+        done = True
+        episode_length = 0
+        rs = 0
 
         while True:
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
-                self._network = data
-                self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
-                hx, cx = torch.zeros(1, 256), torch.zeros(1, 256)
-                state = self._env.reset()
-                state = torch.from_numpy(state)
+                self._shared_net = data
                 break
 
-        done = True
-
-        episode_length = 0
-        rs = 0
         while True:
             # Sync with the shared model
+            self._network.load_state_dict(self._shared_net.state_dict())
             if done:
                 cx = torch.zeros(1, 256)
                 hx = torch.zeros(1, 256)
@@ -137,7 +143,7 @@ class A3CActor(mp.Process):
             loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
-
+            ensure_shared_grads(self._network, self._shared_net)
             self._optimizer.step()
 
             if done:
@@ -200,10 +206,6 @@ class A3CAgent(BaseAgent):
 
         for actor in self.actors:
             actor.start()
-
-        for actor in self.actors:
-            actor.set_network(self.network)
-
 
         logger = self.logger
         cfg = self.cfg
