@@ -127,8 +127,8 @@ class A3CActor(mp.Process):
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
             self._optimizer.step()
 
-            # if rs is not None:
-            print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},\t steps {self._total_steps:10f}")
+            if rs is not None:
+                print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},\t steps {self._total_steps:10f}")
 
 
 
@@ -197,9 +197,8 @@ class A3CAgent(BaseAgent):
 
         while True:
             test_returns = self.eval_episodes()
-            logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
+            logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.counter.value)
             test_tabular = {
-                "Epoch": self.total_steps // cfg.eval_interval,
                 "Steps": self.counter.value,
                 "Speed": self.counter.value / (time.time() - t0),
                 "NumOfEp": len(test_returns),
