@@ -57,78 +57,92 @@ class A3CActor(mp.Process):
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
                 self._network = data
-                self._state = self._env.reset()
                 self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
+                hx, cx = torch.zeros(1, 256), torch.zeros(1, 256)
+                state = self._env.reset()
                 break
 
+        done = True
+
+        episode_length = 0
+        rs = 0
         while True:
-            transitions = []
-            done = False
+            # Sync with the shared model
+            if done:
+                cx = torch.zeros(1, 256)
+                hx = torch.zeros(1, 256)
+            else:
+                cx = cx.detach()
+                hx = hx.detach()
+
+            values = []
+            log_probs = []
+            rewards = []
+            entropies = []
+
             for step in range(cfg.steps_per_transit):
-                s = torch.from_numpy(self._state).unsqueeze(0)
-                v, pi, (hx, cx) = self._network((s, (self._hx, self._cx)))
-                prob = F.softmax(pi, -1)
-                log_prob = F.log_softmax(pi, -1)
-                entropy = 0 - (prob * log_prob).sum(-1, keepdim=True)
-                action = prob.multinomial(1)
-                log_prob = log_prob[:, action]
-                next_state, reward, done, info  = self._env.step(action.item())
+                episode_length += 1
+                state = torch.from_numpy(state)
+                value, logit, (hx, cx) = self._network(state.unsqueeze(0),(hx, cx))
+                prob = F.softmax(logit, dim=-1)
+                log_prob = F.log_softmax(logit, dim=-1)
+                entropy = -(log_prob * prob).sum(1, keepdim=True)
+                entropies.append(entropy)
+
+                action = prob.multinomial(num_samples=1).detach()
+                log_prob = log_prob.gather(1, action)
+
+                state, reward, done, _ = self._env.step(action.numpy())
+                rs += reward
+                reward = self._reward_normalizer(reward)
 
                 with self.lock:
                     self.counter.value += 1
 
-                self._total_steps += 1
+                if done:
+                    episode_length = 0
+                    state = self._env.reset()
 
-                transitions.append([v, log_prob, self._reward_normalizer(reward), entropy])
+                state = torch.from_numpy(state)
+                values.append(value)
+                log_probs.append(log_prob)
+                rewards.append(reward)
 
                 if done:
                     break
 
-                self._state = next_state
-                self._hx, self._cx = hx, cx
+            R = torch.zeros(1, 1)
+            if not done:
+                value, _, _ = self._network((state.unsqueeze(0), (hx, cx)))
+                R = value.detach()
 
-
-            if done:
-                self._state = self._env.reset()
-                self._hx, self._cx = torch.zeros(1, 256), torch.zeros(1, 256)
-                if 'episode' in info:
-                    rs = info['episode']['r']
-                R = torch.zeros(1, 1)
-            else:
-
-                s = torch.from_numpy(self._state).unsqueeze(0)
-                with torch.no_grad():
-                    v_, _, _ = self._network((s, (self._hx, self._cx)))
-                R = v_.detach()
-
-                self._hx = self._hx.detach()
-                self._cx = self._cx.detach()
-                rs = None
-
-            GAE = torch.zeros(1, 1)
-            value_loss, policy_loss, gae, v_prev = 0, 0, torch.zeros(1, 1), R
-            for v, log_prob, reward, entropy in reversed(transitions):
-                R = cfg.discount * R + reward
-                advantage = R - v
-
+            values.append(R)
+            policy_loss = 0
+            value_loss = 0
+            gae = torch.zeros(1, 1)
+            for i in reversed(range(len(rewards))):
+                R = cfg.discount * R + rewards[i]
+                advantage = R - values[i]
                 value_loss = value_loss + 0.5 * advantage.pow(2)
 
-                dt = reward + cfg.discount * v_prev - v
-                GAE = GAE * cfg.discount * cfg.gae_coef + dt
+                # Generalized Advantage Estimation
+                delta_t = rewards[i] + cfg.discount * \
+                          values[i + 1] - values[i]
+                gae = gae * cfg.discount * cfg.gae_coef + delta_t
 
-                policy_loss = policy_loss - log_prob * GAE.detach() - cfg.entropy_coef * entropy
-                v_prev = v
-
-            loss = policy_loss + cfg.value_loss_coef * value_loss
-
+                policy_loss = policy_loss - log_probs[i] * gae.detach() - cfg.entropy_coef * entropies[i]
 
             self._optimizer.zero_grad()
+
+            loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self._network.parameters(), self.cfg.max_grad_norm)
+            torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
+
             self._optimizer.step()
 
-            if rs is not None:
-                print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},\t steps {self._total_steps:10f}")
+            if done:
+                print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},")
+                rs = 0
 
 
 
@@ -150,8 +164,8 @@ class A3CAgent(BaseAgent):
         self.logger = EpochLogger(cfg.log_dir)
 
         self.network = ACNet(
-            in_channels=1,
-            action_dim=self.test_env.action_space.n,
+            1,
+            self.test_env.action_space.n,
         )
 
         self.network.train()
