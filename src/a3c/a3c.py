@@ -2,28 +2,16 @@ import torch
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 
-import copy
 import time
 import numpy as np
-from collections import deque
 
-from src.common.async_actor import AsyncActor
-from src.common.async_replay import AsyncReplayBuffer
 from src.common.base_agent import BaseAgent
 from src.common.utils import close_obj, tensor, make_a3c_env
-from src.common.schedule import LinearSchedule
 from src.common.normalizer import SignNormalizer
 from src.common.logger import EpochLogger
 from src.a3c.model import ACNet
 
 
-
-def ensure_shared_grads(model, shared_model):
-    for param, shared_param in zip(model.parameters(),
-                                   shared_model.parameters()):
-        if shared_param.grad is not None:
-            return
-        shared_param._grad = param.grad
 
 class A3CActor(mp.Process):
     NETWORK = 4
@@ -73,7 +61,6 @@ class A3CActor(mp.Process):
                 break
 
         while True:
-            # Sync with the shared model
             self._network.load_state_dict(self._shared_net.state_dict())
             if done:
                 cx = torch.zeros(1, 256)
@@ -87,7 +74,7 @@ class A3CActor(mp.Process):
             rewards = []
             entropies = []
 
-            for step in range(cfg.steps_per_transit):
+            for step in range(cfg.steps_for_update):
                 episode_length += 1
                 value, logit, (hx, cx) = self._network((state.unsqueeze(0),(hx, cx)))
                 prob = F.softmax(logit, dim=-1)
@@ -143,7 +130,6 @@ class A3CActor(mp.Process):
             loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
-            ensure_shared_grads(self._network, self._shared_net)
             self._optimizer.step()
 
             if done:
@@ -213,7 +199,7 @@ class A3CAgent(BaseAgent):
         logger = self.logger
         t0 = time.time()
 
-        while True:
+        while self.counter.value < self.cfg.max_steps:
             test_returns = self.eval_episodes()
             logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.counter.value)
             test_tabular = {
@@ -230,38 +216,5 @@ class A3CAgent(BaseAgent):
         for actor in self.actors:
             actor.join()
 
-        #
-        # while True:
-        #     test_returns = self.eval_episodes()
-        #     logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
-        #     test_tabular = {
-        #         "Epoch": self.total_steps // cfg.eval_interval,
-        #         "Steps": self.total_steps,
-        #         "NumOfEp": len(test_returns),
-        #         "AverageTestEpRet": np.mean(test_returns),
-        #         "StdTestEpRet": np.std(test_returns),
-        #         "MaxTestEpRet": np.max(test_returns),
-        #         "MinTestEpRet": np.min(test_returns)}
-        #     logger.dump_test(test_tabular)
-        # N = 0
-        # while self.total_steps < self.cfg.max_steps:
-        #     for _ in range(cfg.log_interval // (cfg.num_actors * cfg.steps_per_transit)):
-        #         self.step()
-        #         N += 1
-        #
-        #     logger.log_tabular('TotalEnvInteracts', self.total_steps)
-        #     logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
-        #     logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
-        #     logger.log_tabular('TrainEpRet', with_min_and_max=True)
-        #     logger.log_tabular('Loss', average_only=True)
-        #     logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
-        #     t0 = time.time()
-        #     logger.dump_tabular(self.total_steps)
-        #
-        #     if N % (cfg.save_interval // cfg.log_interval) == 0:
-        #         self.save(f'{self.cfg.log_dir}/{self.total_steps}')
-        #
-        #     if N % (cfg.eval_interval // cfg.log_interval) == 0:
-
-        # self.close()
+        self.close()
 

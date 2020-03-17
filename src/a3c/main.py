@@ -11,16 +11,10 @@ class Config:
     game = 'Pong'
     seed = 0
 
-    dueling = True
-    double = True
-    prioritize = False
-    noisy = False
-
     num_actors = 16
 
 
-    sgd_update_frequency = 1
-    steps_per_transit = 20
+    steps_for_update = 20
     discount = 0.99
     batch_size = 32
     adam_lr = 0.0001
@@ -30,9 +24,6 @@ class Config:
     value_loss_coef = 0.5
     max_grad_norm = 50
 
-    log_interval = 10000
-    eval_interval = 100000
-    save_interval = 1000000
     max_episode_steps = 108000
     max_steps = int(4e7)
     eval_episodes = 10
