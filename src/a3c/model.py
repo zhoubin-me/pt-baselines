@@ -38,9 +38,8 @@ class ACNet(torch.nn.Module):
 
         self.lstm = nn.LSTMCell(32 * 3 * 3, 256)
 
-        num_outputs = action_dim
         self.critic_linear = nn.Linear(256, 1)
-        self.actor_linear = nn.Linear(256, num_outputs)
+        self.actor_linear = nn.Linear(256, action_dim)
 
         self.apply(weights_init)
         self.actor_linear.weight.data = normalized_columns_initializer(

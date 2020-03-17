@@ -5,7 +5,7 @@ import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
 from src.a3c.a3c import A3CAgent
-
+import os
 
 class Config:
     game = 'Pong'
@@ -19,7 +19,6 @@ class Config:
     num_actors = 16
 
 
-    sgd_update_frequency = 1
     steps_per_transit = 20
     discount = 0.99
     batch_size = 32
@@ -33,6 +32,7 @@ class Config:
     log_interval = 10000
     eval_interval = 100000
     save_interval = 1000000
+    max_episode_length = 108000
     max_episode_steps = 108000
     max_steps = int(4e7)
     eval_episodes = 10
@@ -42,6 +42,9 @@ class Config:
     play = False
 
 if __name__ == '__main__':
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['CUDA_VISIBLE_DEVICES'] = ""
+
     parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')
     for k, v in Config.__dict__.items():
         if not k.startswith('_'):
@@ -61,7 +64,7 @@ if __name__ == '__main__':
 
     mkdir(args.log_dir)
     agent = A3CAgent(cfg=args)
-    agent.logger.save_config(args)
+    # agent.logger.save_config(args)
 
     if not args.play:
         mkdir(args.ckpt_dir)
