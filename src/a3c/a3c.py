@@ -58,7 +58,7 @@ class A3CActor(mp.Process):
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
                 self._network = data
-                self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
+                self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr, eps=self.cfg.adam_eps)
                 break
 
         while True:
