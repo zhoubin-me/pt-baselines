@@ -51,7 +51,7 @@ class A3CActor(mp.Process):
         )
         self._reward_normalizer = SignNormalizer()
         self._network = ACNet(self._env.observation_space.shape[0], self._env.action_space)
-        self._optimizer = torch.optim.Adam(self._network.parameters(), self.cfg.adam_lr)
+        self._network.train()
 
     def set_network(self, net):
         self.__pipe.send([self.NETWORK, net])
@@ -70,6 +70,7 @@ class A3CActor(mp.Process):
             op, data = self.__worker_pipe.recv()
             if op == self.NETWORK:
                 self._shared_net = data
+                self._optimizer = torch.optim.Adam(self._shared_net.parameters(), self.cfg.adam_lr)
                 break
 
         while True:
@@ -207,8 +208,10 @@ class A3CAgent(BaseAgent):
         for actor in self.actors:
             actor.start()
 
+        for actor in self.actors:
+            actor.set_network(self.network)
+
         logger = self.logger
-        cfg = self.cfg
         t0 = time.time()
 
         while True:
