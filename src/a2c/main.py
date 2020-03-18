@@ -2,26 +2,30 @@ import argparse
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.a3c.a3c import A3CAgent
+from src.a2c.a2c import A2CAgent
 
 
 class Config:
     game = 'Pong'
     seed = 0
 
-    num_actors = 16
+    num_envs = 16
+    recurrent = True
 
-    nsteps = 20
+    nsteps = 5
     discount = 0.99
-    adam_lr = 0.0001
+    rms_lr = 1e-5
+    rms_eps = 1e-5
+    rms_alpha = 0.99
 
     gae_coef = 1.0
     entropy_coef = 0.01
     value_loss_coef = 0.5
-    max_grad_norm = 40
+    max_grad_norm = 0.5
 
     max_episode_steps = 108000
-    max_steps = int(4e7)
+    max_steps = int(5e7)
+    log_interval = 10000
     eval_episodes = 10
 
     ckpt = ""
@@ -47,7 +51,7 @@ if __name__ == '__main__':
     set_thread(1)
 
     mkdir(args.log_dir)
-    agent = A3CAgent(cfg=args)
+    agent = A2CAgent(cfg=args)
     agent.logger.save_config(args)
 
     if not args.play:

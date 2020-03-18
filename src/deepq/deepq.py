@@ -30,7 +30,7 @@ class RainbowActor(AsyncActor):
             record_video=False,
             max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
-        )
+        )()
 
         self._random_action_prob = LinearSchedule(1.0, cfg.min_epsilon, cfg.epsilon_steps)
         self._state_normalizer = ImageNormalizer()
@@ -72,7 +72,7 @@ class RainbowAgent(BaseAgent):
             record_video=True,
             max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
-        )
+        )()
 
         self.logger = EpochLogger(cfg.log_dir)
         self.replay = AsyncReplayBuffer(

@@ -92,6 +92,9 @@ class ImageNormalizer(RescaleNormalizer):
 
 class SignNormalizer(BaseNormalizer):
     def __call__(self, x):
-        return np.sign(x)
+        if isinstance(x, torch.Tensor):
+            return x.sign().float()
+        else:
+            return np.sign(x)
 
 

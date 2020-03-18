@@ -8,6 +8,7 @@ from pathlib import Path
 from gym import wrappers
 from src.common.atari_wrapper import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit
 from src.common.monitor import Monitor
+from src.common.vec_env import VecNormalize, ShmemVecEnv, VecPyTorch, DummyVecEnv, VecPyTorchFrameStack
 
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -37,16 +38,16 @@ def random_seed(seed=None):
     torch.manual_seed(np.random.randint(int(1e6)))
 
 
-def make_deepq_env(game, log_prefix, record_video=False, seed=1234, max_episode_steps=108000):
+def make_deepq_env(game, log_prefix, record_video=False, max_episode_steps=108000, seed=1234, frame_stack=True, transpose_image=True):
     def trunk():
         env = make_atari(f'{game}NoFrameskip-v4', max_episode_steps)
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrap_deepmind(env, episode_life=not record_video, frame_stack=True)
+        env = wrap_deepmind(env, episode_life=not record_video, frame_stack=frame_stack, transpose_image=transpose_image)
         if record_video:
             env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
-    return trunk()
+    return trunk
 
 
 def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000, seed=1234):
@@ -61,4 +62,37 @@ def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000,
         if record_video:
             env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
-    return trunk()
+    return trunk
+
+
+
+
+
+def make_vec_env(game,
+                 log_prefix,
+                 record_video=False,
+                 max_episode_steps=108000,
+                 seed=1234,
+                 num_processes=16,
+                 gamma=0.99,
+                 ):
+
+
+    envs = [make_deepq_env(game,
+                           f"{log_prefix}/rank_{i}",
+                           record_video=record_video,
+                           max_episode_steps=max_episode_steps,
+                           seed=seed+i,
+                           frame_stack=False,
+                           transpose_image=True) for i in range(num_processes)]
+
+    if len(envs) > 1:
+        envs = ShmemVecEnv(envs, context='fork')
+    else:
+        envs = DummyVecEnv(envs)
+
+    envs = VecNormalize(envs, gamma=gamma)
+    envs = VecPyTorch(envs, torch.device(0))
+    envs = VecPyTorchFrameStack(envs, 4, torch.device(0))
+    return envs
+

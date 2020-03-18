@@ -40,7 +40,8 @@ class A3CActor(mp.Process):
             False,
             max_episode_steps = cfg.max_episode_steps,
             seed=cfg.seed+self.n
-        )
+        )()
+
         self._reward_normalizer = SignNormalizer()
 
     def set_network(self, net):
@@ -69,11 +70,11 @@ class A3CActor(mp.Process):
                 hx, cx = hx.detach(), cx.detach()
 
             # Sample experiences
-            for step in range(cfg.steps_for_update):
+            for step in range(cfg.nsteps):
                 v, pi, (hx, cx) = self._network((torch.from_numpy(state).unsqueeze(0),(hx, cx)))
                 m = Categorical(logits=pi)
 
-                action = m.sample(1)
+                action = m.sample()
                 log_prob = m.log_prob(action)
                 entropy = m.entropy()
 
@@ -114,7 +115,7 @@ class A3CActor(mp.Process):
             self._optimizer.zero_grad()
             loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
+            # torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
             with self.lock:
                 self._optimizer.step()
             self._optimizer.step()
@@ -138,7 +139,7 @@ class A3CAgent(BaseAgent):
             True,
             max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
-        )
+        )()
         self.logger = EpochLogger(cfg.log_dir)
 
         self.network = ACNet(self.test_env.observation_space.shape[0], self.test_env.action_space.n)
