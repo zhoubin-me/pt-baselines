@@ -18,7 +18,7 @@ class Config:
     rms_eps = 1e-5
     rms_alpha = 0.99
 
-    gae_coef = 1.0
+    gae_coef = 0.95
     entropy_coef = 0.01
     value_loss_coef = 0.5
     max_grad_norm = 0.5
@@ -31,6 +31,7 @@ class Config:
     ckpt = ""
     log_dir = ""
     play = False
+    device_id = 0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rainbow Hyperparameters')

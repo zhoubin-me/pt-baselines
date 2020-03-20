@@ -4,116 +4,127 @@ import torch.multiprocessing as mp
 from torch.distributions import Categorical
 
 import time
-
+import numpy as np
 from collections import deque
 
 from src.common.base_agent import BaseAgent
-from src.common.utils import make_a3c_env, make_vec_env
-from src.common.normalizer import SignNormalizer
-from src.common.logger import EpochLogger
-from src.a2c.model import ACNet
-
-
+from .env import make_vec_envs
+from .model import Policy
+from .storage import RolloutStorage
 
 class A2CAgent(BaseAgent):
     def __init__(self, cfg):
         super(A2CAgent, self).__init__(cfg)
 
-        self.envs = make_vec_env(
-            cfg.game,
-            f'{cfg.log_dir}/train',
-            False,
-            max_episode_steps=cfg.max_episode_steps,
-            seed=cfg.seed,
-            gamma=cfg.discount,
-            num_processes=cfg.num_envs
-        )
-        self.logger = EpochLogger(cfg.log_dir)
+        self.envs = make_vec_envs(cfg.game, cfg.seed, cfg.num_actors,
+                      cfg.discount, cfg.log_dir, torch.device(cfg.device_id), False)
 
-        self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
-        self.reward_normalizer = SignNormalizer()
+        self.policy = Policy(self.envs.observatio_space.shape, self.envs.action_space, base_kwargs={'recurrent': True}).cuda()
+        self.optimizer = torch.optim.RMSprop(self.policy.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
+
+
+        self.rollouts = RolloutStorage(
+            cfg.nsteps, cfg.num_actors, self.envs.observation_space, self.envs.action_space, 512
+        )
 
     def run(self):
 
-        cfg = self.cfg
-        torch.autograd.set_detect_anomaly(True)
-        logger = self.logger
-        logger.store(TrainEpRet=0, Loss=0)
-        t0 = time.time()
+        args = self.cfg
+        envs = self.envs
+        rollouts = self.rollouts
+        device = torch.device(args.device_id)
+        obs = self.envs.reset()
+        self.rollouts.obs[0].copy_(obs)
+        self.rollouts.to(torch.device(self.cfg.device_id))
 
-        states, hx, cx = self.envs.reset(), torch.zeros(cfg.num_envs, 512).cuda(), torch.zeros(cfg.num_envs, 512).cuda()
-        steps = 0
-        while steps < cfg.max_steps:
-            # Sample experiences
-            rollouts, Rs, GAEs = [], [], []
+        obs = envs.reset()
+        rollouts.obs[0].copy_(obs)
+        rollouts.to(device)
+
+        episode_rewards = deque(maxlen=10)
+
+        start = time.time()
+        num_updates = int(
+            args.num_steps) // args.nsteps // args.num_actors
+        for j in range(num_updates):
+
+            for step in range(args.nsteps):
+                # Sample actions
+                with torch.no_grad():
+                    value, action, action_log_prob, recurrent_hidden_states = self.policy.act(
+                        rollouts.obs[step], rollouts.recurrent_hidden_states[step],
+                        rollouts.masks[step])
+
+                # Obser reward and next obs
+                obs, reward, done, infos = envs.step(action)
+
+                for info in infos:
+                    if 'episode' in info.keys():
+                        episode_rewards.append(info['episode']['r'])
+
+                # If done then clean the history of observations.
+                masks = torch.FloatTensor(
+                    [[0.0] if done_ else [1.0] for done_ in done])
+                bad_masks = torch.FloatTensor(
+                    [[0.0] if 'bad_transition' in info.keys() else [1.0]
+                     for info in infos])
+                rollouts.insert(obs, recurrent_hidden_states, action,
+                                action_log_prob, value, reward, masks, bad_masks)
+
             with torch.no_grad():
-                for step in range(cfg.nsteps):
-                    v, pi, (hx_, cx_) = self.network((states, (hx, cx)))
-                    actions = Categorical(logits=pi).sample()
-
-                    states, rewards, dones, infos = self.envs.step(actions)
-                    rewards = self.reward_normalizer(rewards)
-                    steps += cfg.num_envs
-                    rollouts.append((states, actions, v, hx, cx, rewards, dones))
-                    hx = hx_ * (1 - dones)
-                    cx = cx_ * (1 - dones)
-
-                    for info in infos:
-                        if 'episode' in info:
-                            self.logger.store(TrainEpRet=info['episode']['r'])
-                            # print(info)
-
-                # Compute R and GAE
-                v_next, _, _ = self.network((states, (hx, cx)))
-                policy_loss, value_loss, gae, R = 0, 0, 0, v_next
-                for _, _, v, _, _, reward, done in reversed(rollouts):
-                    R = cfg.discount * R * (1 - done) + reward
-
-                    td_error = reward + cfg.discount * v_next - v
-                    gae = gae * cfg.discount * cfg.gae_coef + td_error
-
-                    v_next = v
-
-                    Rs.append(R)
-                    GAEs.append(gae)
+                next_value = self.policy.get_value(
+                    rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
+                    rollouts.masks[-1]).detach()
 
 
-            # Update networks
-            sx = torch.cat([x[0] for x in rollouts], 0)
-            ax = torch.cat([x[1] for x in rollouts], 0).long()
-            hxs = torch.cat([x[3] for x in rollouts], 0)
-            cxs = torch.cat([x[4] for x in rollouts], 0)
+            rollouts.compute_returns(next_value, True, args.discount,
+                                     args.gae_coef, False)
 
-            rs = torch.cat(list(reversed(Rs)), 0)
-            gaes = torch.cat(list(reversed(GAEs)), 0)
-            vs, pis, _ = self.network((sx, (hxs, cxs)))
+            obs_shape = rollouts.obs.size()[2:]
+            action_shape = rollouts.actions.size()[-1]
+            num_steps, num_processes, _ = rollouts.rewards.size()
 
+            values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
+                rollouts.obs[:-1].view(-1, *obs_shape),
+                rollouts.recurrent_hidden_states[0].view(
+                    -1, self.actor_critic.recurrent_hidden_state_size),
+                rollouts.masks[:-1].view(-1, 1),
+                rollouts.actions.view(-1, action_shape))
 
-            dist = Categorical(logits=pis)
-            log_probs = dist.log_prob(ax)
-            value_loss = (rs - vs).pow(2)
-            policy_loss = 0 - gaes * log_probs - dist.entropy()
+            values = values.view(num_steps, num_processes, 1)
+            action_log_probs = action_log_probs.view(num_steps, num_processes, 1)
 
-            loss = policy_loss.mean() + cfg.value_loss_coef * value_loss.mean()
+            advantages = rollouts.returns[:-1] - values
+            value_loss = advantages.pow(2).mean()
+
+            action_loss = -(advantages.detach() * action_log_probs).mean()
+
 
             self.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
+            (value_loss * self.value_loss_coef + action_loss -
+             dist_entropy * self.entropy_coef).backward()
+
+            torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+
             self.optimizer.step()
-            logger.store(Loss=loss.item())
+
+            rollouts.after_update()
 
 
-            if steps % cfg.log_interval == 0:
-                logger.log_tabular('TotalEnvInteracts', steps)
-                logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
-                logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
-                logger.log_tabular('TrainEpRet', with_min_and_max=True)
-                logger.log_tabular('Loss', average_only=True)
-                logger.log_tabular('RemHrs',
-                                   (cfg.max_steps - steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
-                t0 = time.time()
-                logger.dump_tabular(steps)
+            if j % args.log_interval == 0 and len(episode_rewards) > 1:
+                total_num_steps = (j + 1) * args.num_actors * args.nsteps
+                end = time.time()
+                print(
+                    "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
+                        .format(j, total_num_steps,
+                                int(total_num_steps / (end - start)),
+                                len(episode_rewards), np.mean(episode_rewards),
+                                np.median(episode_rewards), np.min(episode_rewards),
+                                np.max(episode_rewards), dist_entropy, value_loss,
+                                action_loss))
+
+
+
 
 
 
