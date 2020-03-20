@@ -6,10 +6,10 @@ from src.a2c.a2c import A2CAgent
 
 
 class Config:
-    game = 'Pong'
+    game = 'PongNoFrameskip-v4'
     seed = 0
 
-    num_envs = 16
+    num_actors = 16
     recurrent = True
 
     nsteps = 5
@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     mkdir(args.log_dir)
     agent = A2CAgent(cfg=args)
-    agent.logger.save_config(args)
+    # agent.logger.save_config(args)
 
     if not args.play:
         mkdir(args.ckpt_dir)
