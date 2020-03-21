@@ -68,7 +68,7 @@ def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000,
 
 
 
-def make_vec_env(game,
+def make_vec_envs(game,
                  log_prefix,
                  record_video=False,
                  max_episode_steps=108000,
