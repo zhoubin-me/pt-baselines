@@ -6,7 +6,7 @@ import multiprocessing as mp
 import numpy as np
 from .vec_env import VecEnv, CloudpickleWrapper, clear_mpi_env_vars
 import ctypes
-from baselines import logger
+from src.common import temp_logger as logger
 
 from .util import dict_to_obs, obs_space_info, obs_to_dict
 
@@ -31,6 +31,7 @@ class ShmemVecEnv(VecEnv):
         if spaces:
             observation_space, action_space = spaces
         else:
+            pass
             logger.log('Creating dummy env object to get spaces')
             with logger.scoped_configure(format_strs=[]):
                 dummy = env_fns[0]()
@@ -76,11 +77,6 @@ class ShmemVecEnv(VecEnv):
         outs = [pipe.recv() for pipe in self.parent_pipes]
         self.waiting_step = False
         obs, rews, dones, infos = zip(*outs)
-        obs = list(obs)
-        for i, (pipe, done) in enumerate(zip(self.parent_pipes, dones)):
-            if done:
-                pipe.send(('reset', None))
-                obs[i] = pipe.recv()
         return self._decode_obses(obs), np.array(rews), np.array(dones), infos
 
     def close_extras(self):
