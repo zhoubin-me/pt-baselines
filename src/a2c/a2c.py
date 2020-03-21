@@ -13,18 +13,18 @@ from .model import Policy
 from .storage import RolloutStorage
 
 class A2CAgent(BaseAgent):
-    def __init__(self, cfg):
-        super(A2CAgent, self).__init__(cfg)
+    def __init__(self, args):
+        super(A2CAgent, self).__init__(args)
 
-        self.envs = make_vec_envs(cfg.game, cfg.seed, cfg.num_actors,
-                      cfg.discount, cfg.log_dir, torch.device(cfg.device_id), False)
+        self.envs = make_vec_envs(f'{args.game}NoFrameskip-v4', args.seed, args.num_processes,
+                      args.gamma, args.log_dir, torch.device(args.device_id), False)
 
         self.policy = Policy(self.envs.observation_space.shape, self.envs.action_space.n, base_kwargs={'recurrent': True}).cuda()
-        self.optimizer = torch.optim.RMSprop(self.policy.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
+        self.optimizer = torch.optim.RMSprop(self.policy.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
 
 
         self.rollouts = RolloutStorage(
-            cfg.nsteps, cfg.num_actors, self.envs.observation_space.shape, self.envs.action_space, 512
+            args.nsteps, args.num_actors, self.envs.observation_space.shape, self.envs.action_space, 512
         )
 
     def run(self):
@@ -35,7 +35,7 @@ class A2CAgent(BaseAgent):
         device = torch.device(args.device_id)
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        self.rollouts.to(torch.device(self.cfg.device_id))
+        self.rollouts.to(torch.device(args.device_id))
 
         obs = envs.reset()
         rollouts.obs[0].copy_(obs)

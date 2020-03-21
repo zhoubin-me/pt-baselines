@@ -5,12 +5,12 @@ import numpy as np
 import torch
 from gym.spaces.box import Box
 
-from src.common.atari_wrapper import make_atari, wrap_deepmind
-from src.common.vec_env import VecEnvWrapper
-from src.common.monitor import Monitor
-from src.common.vec_env.dummy_vec_env import DummyVecEnv
-from src.common.vec_env.shmem_vec_env import ShmemVecEnv
-from src.common.vec_env.vec_normalize import \
+from baselines import bench
+from baselines.common.atari_wrappers import make_atari, wrap_deepmind
+from baselines.common.vec_env import VecEnvWrapper
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from baselines.common.vec_env.shmem_vec_env import ShmemVecEnv
+from baselines.common.vec_env.vec_normalize import \
     VecNormalize as VecNormalize_
 
 try:
@@ -48,10 +48,10 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets):
             env = TimeLimitMask(env)
 
         if log_dir is not None:
-            env = Monitor(
+            env = bench.Monitor(
                 env,
                 os.path.join(log_dir, str(rank)),
-                allow_early_resets=True)
+                allow_early_resets=allow_early_resets)
 
         if is_atari:
             if len(env.observation_space.shape) == 3:

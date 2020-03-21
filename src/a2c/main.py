@@ -9,16 +9,16 @@ class Config:
     game = 'PongNoFrameskip-v4'
     seed = 0
 
-    num_actors = 16
+    num_processes = 16
     recurrent = True
 
     nsteps = 5
-    discount = 0.99
-    rms_lr = 1e-5
+    gamma = 0.99
+    rms_lr = 7e-4
     rms_eps = 1e-5
     rms_alpha = 0.99
 
-    gae_coef = 0.95
+    gae_lambda = 0.95
     entropy_coef = 0.01
     value_loss_coef = 0.5
     max_grad_norm = 0.5
