@@ -2,11 +2,11 @@ import argparse
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.a2c.a2c import A2CAgent
+from .agent import A2CAgent
 
 
 class Config:
-    game = 'PongNoFrameskip-v4'
+    game = 'Pong'
     seed = 0
 
     num_processes = 16

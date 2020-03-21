@@ -12,7 +12,7 @@ from src.common.base_agent import BaseAgent
 from src.common.utils import close_obj, tensor, make_a3c_env
 from src.common.normalizer import SignNormalizer
 from src.common.logger import EpochLogger
-from src.a3c.model import ACNet
+from .model import ACNet
 
 
 

@@ -9,9 +9,9 @@ from collections import deque, namedtuple
 
 from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
-from src.a2c.model import ACNet
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer
+from .model import ACNet
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
@@ -64,7 +64,7 @@ class A2CAgent(BaseAgent):
                     # rewards = self.reward_normalizer(rewards)
                     steps += cfg.num_processes
 
-                    self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).unsqueeze(-1).float().cuda())
+                    self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).float().cuda())
                     self.rollouts.actions[step].copy_(torch.tensor(actions).unsqueeze(-1).long().cuda())
                     self.rollouts.values[step].copy_(v)
                     self.rollouts.rewards[step].copy_(torch.tensor(rewards).float().cuda())
