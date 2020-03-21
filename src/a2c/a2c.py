@@ -16,15 +16,15 @@ class A2CAgent(BaseAgent):
     def __init__(self, args):
         super(A2CAgent, self).__init__(args)
 
-        self.envs = make_vec_envs(f'{args.game}NoFrameskip-v4', args.seed, args.num_processes,
+        self.envs = make_vec_envs(args.game, args.seed, args.num_processes,
                       args.gamma, args.log_dir, torch.device(args.device_id), False)
 
-        self.policy = Policy(self.envs.observation_space.shape, self.envs.action_space.n, base_kwargs={'recurrent': True}).cuda()
+        self.policy = Policy(self.envs.observation_space.shape, self.envs.action_space, base_kwargs={'recurrent': False}).cuda()
         self.optimizer = torch.optim.RMSprop(self.policy.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
 
 
         self.rollouts = RolloutStorage(
-            args.nsteps, args.num_actors, self.envs.observation_space.shape, self.envs.action_space, 512
+            args.nsteps, args.num_processes, self.envs.observation_space.shape, self.envs.action_space, 512
         )
 
     def run(self):
@@ -45,7 +45,7 @@ class A2CAgent(BaseAgent):
 
         start = time.time()
         num_updates = int(
-            args.max_steps) // args.nsteps // args.num_actors
+            args.max_steps) // args.nsteps // args.num_processes
         for j in range(num_updates):
 
             for step in range(args.nsteps):
@@ -77,8 +77,8 @@ class A2CAgent(BaseAgent):
                     rollouts.masks[-1]).detach()
 
 
-            rollouts.compute_returns(next_value, True, args.discount,
-                                     args.gae_coef, False)
+            rollouts.compute_returns(next_value, True, args.gamma,
+                                     args.gae_lambda, False)
 
             obs_shape = rollouts.obs.size()[2:]
             action_shape = rollouts.actions.size()[-1]
@@ -112,7 +112,7 @@ class A2CAgent(BaseAgent):
 
 
             if j % 10 == 0 and len(episode_rewards) > 1:
-                total_num_steps = (j + 1) * args.num_actors * args.nsteps
+                total_num_steps = (j + 1) * args.num_processes * args.nsteps
                 end = time.time()
                 print(
                     "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"

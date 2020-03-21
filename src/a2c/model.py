@@ -30,6 +30,7 @@ class Policy(nn.Module):
                 raise NotImplementedError
 
         self.base = base(obs_shape[0], **base_kwargs)
+        print(action_space)
 
         if action_space.__class__.__name__ == "Discrete":
             num_outputs = action_space.n

@@ -48,11 +48,11 @@ if __name__ == '__main__':
     if len(args.ckpt) > 0:
         args.log_dir = f'log/a3c-{args.game}-{args.seed}-eval/'
 
-    random_seed(args.seed)
-    set_thread(1)
+    # random_seed(args.seed)
+    # set_thread(1)
 
     mkdir(args.log_dir)
-    agent = A2CAgent(cfg=args)
+    agent = A2CAgent(args=args)
     # agent.logger.save_config(args)
 
     if not args.play:
