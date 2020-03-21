@@ -9,7 +9,7 @@ from collections import deque
 
 from src.common.base_agent import BaseAgent
 from .env import make_vec_envs
-from .model import Policy
+from .model import Policy, ACNet
 from .storage import RolloutStorage
 
 class A2CAgent(BaseAgent):
@@ -19,7 +19,7 @@ class A2CAgent(BaseAgent):
         self.envs = make_vec_envs(args.game, args.seed, args.num_processes,
                       args.gamma, args.log_dir, torch.device(args.device_id), False)
 
-        self.policy = Policy(self.envs.observation_space.shape, self.envs.action_space, base_kwargs={'recurrent': False}).cuda()
+        self.policy = ACNet(4, self.envs.action_space.n).cuda()
         self.optimizer = torch.optim.RMSprop(self.policy.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
 
 

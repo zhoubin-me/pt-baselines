@@ -2,14 +2,63 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from .distributions import Bernoulli, Categorical, DiagGaussian
+from torch.distributions import Categorical
+from .distributions import Bernoulli, DiagGaussian
 
 def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
     bias_init(module.bias.data)
     return module
 
+class ACNet(nn.Module):
+    def __init__(self, in_channels, action_dim):
+        super(ACNet, self).__init__()
+
+        self.convs = nn.Sequential(
+            nn.Conv2d(4, 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
+            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), Flatten(),
+            nn.Linear(32 * 7 * 7, 512), nn.ReLU())
+
+        self.fc_v = nn.Linear(512, 1)
+        self.fc_pi = nn.Linear(512, action_dim)
+
+
+    def forward(self, x):
+        ix, (hx, cx) = x
+        phi = self.convs(ix)
+        hx, cx = self.lstm(phi, (hx, cx))
+        return self.fc_v(hx), self.fc_pi(hx), (hx, cx)
+
+
+    def act(self, inputs, rnn_hxs, masks, deterministic=False):
+        features = self.convs(inputs)
+        values = self.fc_v(features)
+        logits = self.fc_pi(features)
+        dist = Categorical(logits=logits)
+
+        actions = dist.sample()
+        action_log_probs = dist.log_prob(actions)
+        dist_entropy = dist.entropy().mean()
+
+        return values, actions, action_log_probs, rnn_hxs
+
+    def get_value(self, inputs, rnn_hxs, masks):
+        features = self.convs(inputs)
+        values = self.fc_v(features)
+        return values
+
+    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
+        features = self.convs(inputs)
+        values = self.fc_v(features)
+        logits = self.fc_pi(features)
+        dist = Categorical(logits=logits)
+
+        actions = dist.sample()
+        action_log_probs = dist.log_prob(actions)
+        dist_entropy = dist.entropy().mean()
+
+        return values, action_log_probs, dist_entropy, rnn_hxs
 
 class Flatten(nn.Module):
     def forward(self, x):
