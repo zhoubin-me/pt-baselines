@@ -100,8 +100,12 @@ class A2CAgent(BaseAgent):
             loss.backward()
             torch.nn.utils.clip_grad_norm(self.network.parameters(), cfg.max_grad_norm)
             self.optimizer.step()
-
             logger.store(Loss=loss.item())
+
+
+            self.rollouts.obs[0].copy(self.rollouts.obs[-1])
+            self.rollouts.mask[0].copy(self.rollouts.mask[-1])
+
 
             if steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', steps)
