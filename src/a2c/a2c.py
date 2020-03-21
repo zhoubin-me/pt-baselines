@@ -19,12 +19,12 @@ class A2CAgent(BaseAgent):
         self.envs = make_vec_envs(cfg.game, cfg.seed, cfg.num_actors,
                       cfg.discount, cfg.log_dir, torch.device(cfg.device_id), False)
 
-        self.policy = Policy(self.envs.observatio_space.shape, self.envs.action_space, base_kwargs={'recurrent': True}).cuda()
+        self.policy = Policy(self.envs.observation_space.shape, self.envs.action_space.n, base_kwargs={'recurrent': True}).cuda()
         self.optimizer = torch.optim.RMSprop(self.policy.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
 
 
         self.rollouts = RolloutStorage(
-            cfg.nsteps, cfg.num_actors, self.envs.observation_space, self.envs.action_space, 512
+            cfg.nsteps, cfg.num_actors, self.envs.observation_space.shape, self.envs.action_space, 512
         )
 
     def run(self):
@@ -45,7 +45,7 @@ class A2CAgent(BaseAgent):
 
         start = time.time()
         num_updates = int(
-            args.num_steps) // args.nsteps // args.num_actors
+            args.max_steps) // args.nsteps // args.num_actors
         for j in range(num_updates):
 
             for step in range(args.nsteps):
@@ -84,10 +84,10 @@ class A2CAgent(BaseAgent):
             action_shape = rollouts.actions.size()[-1]
             num_steps, num_processes, _ = rollouts.rewards.size()
 
-            values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
+            values, action_log_probs, dist_entropy, _ = self.policy.evaluate_actions(
                 rollouts.obs[:-1].view(-1, *obs_shape),
                 rollouts.recurrent_hidden_states[0].view(
-                    -1, self.actor_critic.recurrent_hidden_state_size),
+                    -1, 512),
                 rollouts.masks[:-1].view(-1, 1),
                 rollouts.actions.view(-1, action_shape))
 
@@ -101,17 +101,17 @@ class A2CAgent(BaseAgent):
 
 
             self.optimizer.zero_grad()
-            (value_loss * self.value_loss_coef + action_loss -
-             dist_entropy * self.entropy_coef).backward()
+            (value_loss * args.value_loss_coef + action_loss -
+             dist_entropy * args.entropy_coef).backward()
 
-            torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), args.max_grad_norm)
 
             self.optimizer.step()
 
             rollouts.after_update()
 
 
-            if j % args.log_interval == 0 and len(episode_rewards) > 1:
+            if j % 10 == 0 and len(episode_rewards) > 1:
                 total_num_steps = (j + 1) * args.num_actors * args.nsteps
                 end = time.time()
                 print(
