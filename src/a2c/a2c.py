@@ -51,7 +51,6 @@ class A2CAgent(BaseAgent):
         steps = 0
         while steps < cfg.max_steps:
             # Sample experiences
-            rollouts, Rs, GAEs = [], [], []
             with torch.no_grad():
                 for step in range(cfg.nsteps):
                     v, pi = self.network(self.rollouts.obs[step])
@@ -59,19 +58,18 @@ class A2CAgent(BaseAgent):
 
                     states, rewards, dones, infos = self.envs.step(actions)
                     # rewards = self.reward_normalizer(rewards)
-                    steps += cfg.num_envs
+                    steps += cfg.num_processes
 
-                    self.rollouts.masks[step + 1].copy_(1 - dones)
-                    self.rollouts.actions[step].copy_(actions)
+                    self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).unsqueeze(-1).float().cuda())
+                    self.rollouts.actions[step].copy_(torch.tensor(actions).unsqueeze(-1).long().cuda())
                     self.rollouts.values[step].copy_(v)
-                    self.rollouts.rewards[step].copy_(rewards)
+                    self.rollouts.rewards[step].copy_(torch.tensor(rewards).float().cuda())
                     self.rollouts.obs[step + 1].copy_(states / 255.0)
 
 
                     for info in infos:
                         if 'episode' in info:
                             self.logger.store(TrainEpRet=info['episode']['r'])
-                            print(info)
 
                 # Compute R and GAE
                 v_next, _, = self.network(self.rollouts.obs[-1])
@@ -83,28 +81,29 @@ class A2CAgent(BaseAgent):
                     self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
 
 
-            vs, pis = self.network(rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape))
+            vs, pis = self.network(self.rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape))
             vs = vs.view(cfg.nsteps, cfg.num_processes, 1)
             dist = Categorical(logits=pis)
-            log_probs = dist.log_prob(rollouts.actions.view(-1))
+            log_probs = dist.log_prob(self.rollouts.actions.view(-1))
             log_probs = log_probs.view(cfg.nsteps, cfg.num_processes, 1)
 
             advs = self.rollouts.returns[:-1] - vs
             value_loss = advs.pow(2).mean()
 
-            action_loss = 0 - (advs.detach() * log_probs).mean() - dist.entropy() * cfg.entropy_coef
+            action_loss = 0 - (advs.detach() * log_probs + dist.entropy() * cfg.entropy_coef).mean()
+
 
             loss = value_loss * cfg.value_loss_coef + action_loss
 
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm(self.network.parameters(), cfg.max_grad_norm)
+            torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
             self.optimizer.step()
             logger.store(Loss=loss.item())
 
 
-            self.rollouts.obs[0].copy(self.rollouts.obs[-1])
-            self.rollouts.mask[0].copy(self.rollouts.mask[-1])
+            self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+            self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
 
             if steps % cfg.log_interval == 0:
