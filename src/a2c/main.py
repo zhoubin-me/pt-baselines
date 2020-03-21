@@ -25,7 +25,7 @@ class Config:
 
     max_episode_steps = 108000
     max_steps = int(5e7)
-    log_interval = 10000
+    log_interval = 8000
     eval_episodes = 10
 
     ckpt = ""

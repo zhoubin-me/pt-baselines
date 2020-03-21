@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
-from .distributions import Bernoulli, DiagGaussian
 
 
 
@@ -32,39 +31,13 @@ class ACNet(nn.Module):
 
 
     def forward(self, x):
-        pass
-
-
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        features = self.convs(inputs / 255.0)
+        features = self.convs(x)
         values = self.fc_v(features)
         logits = self.fc_pi(features)
-        dist = Categorical(logits=logits)
+        return values, logits
 
-        actions = dist.sample()
-        action_log_probs = dist.log_prob(actions)
-        dist_entropy = dist.entropy().mean()
 
-        return values, actions.unsqueeze(-1), action_log_probs.unsqueeze(-1), rnn_hxs
 
-    def get_value(self, inputs, rnn_hxs, masks):
-        features = self.convs(inputs / 255.0)
-        values = self.fc_v(features)
-        return values
 
-    def evaluate_actions(self, inputs, rnn_hxs, masks, actions):
-        features = self.convs(inputs / 255.0)
-        values = self.fc_v(features)
-        logits = self.fc_pi(features)
-        dist = Categorical(logits=logits)
-
-        action_log_probs = dist.log_prob(actions.view(-1))
-        dist_entropy = dist.entropy().mean()
-
-        return values, action_log_probs.unsqueeze(-1), dist_entropy, rnn_hxs
-
-class Flatten(nn.Module):
-    def forward(self, x):
-        return x.view(x.size(0), -1)
 
 
