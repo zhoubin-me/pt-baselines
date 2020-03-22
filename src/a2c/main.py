@@ -2,11 +2,11 @@ import argparse
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.a2c.a2c import A2CAgent
+from .agent import A2CAgent
 
 
 class Config:
-    game = 'PongNoFrameskip-v4'
+    game = 'Pong'
     seed = 0
 
     num_processes = 16
@@ -42,13 +42,13 @@ if __name__ == '__main__':
     print(args)
 
     if len(args.log_dir) == 0:
-        args.log_dir = f'log/a3c-{args.game}-{args.seed}/'
-        args.ckpt_dir = f'ckpt/a3c-{args.game}-{args.seed}/'
+        args.log_dir = f'log/a2c-{args.game}-{args.seed}/'
+        args.ckpt_dir = f'ckpt/a2c-{args.game}-{args.seed}/'
 
     if len(args.ckpt) > 0:
-        args.log_dir = f'log/a3c-{args.game}-{args.seed}-eval/'
+        args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
 
-    # random_seed(args.seed)
+    random_seed(args.seed)
     # set_thread(1)
 
     mkdir(args.log_dir)

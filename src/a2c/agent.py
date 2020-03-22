@@ -9,8 +9,9 @@ from collections import deque, namedtuple
 
 from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
-from src.a2c.model import ACNet
 from src.common.logger import EpochLogger
+from src.common.normalizer import SignNormalizer
+from .model import ACNet
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])

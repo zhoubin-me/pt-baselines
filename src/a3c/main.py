@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.a3c.a3c import A3CAgent
+from .agent import A3CAgent
 
 
 class Config:
