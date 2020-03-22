@@ -11,7 +11,7 @@ from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
 from src.a2c.model import ACNet
 from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer
+from src.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
@@ -21,7 +21,7 @@ class A2CAgent(BaseAgent):
 
         self.envs = make_vec_envs(args.game,
                                   args.log_dir,
-                                  False,
+                                  record_video=False,
                                   seed=args.seed,
                                   num_processes=args.num_processes,
                                   gamma=args.gamma)
@@ -30,6 +30,7 @@ class A2CAgent(BaseAgent):
         self.optimizer = torch.optim.RMSprop(self.network.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
         self.logger = EpochLogger(args.log_dir)
         self.reward_normalizer = SignNormalizer()
+        self.state_normalizer = ImageNormalizer
 
 
 
@@ -51,7 +52,7 @@ class A2CAgent(BaseAgent):
         t0 = time.time()
 
         states = self.envs.reset()
-        self.rollouts.obs.copy_(states / 255.0)
+        self.rollouts.obs.copy_(self.state_normalizer(states))
         steps = 0
         while steps < cfg.max_steps:
             # Sample experiences
@@ -61,14 +62,13 @@ class A2CAgent(BaseAgent):
                     actions = Categorical(logits=pi).sample()
 
                     states, rewards, dones, infos = self.envs.step(actions)
-                    # rewards = self.reward_normalizer(rewards)
                     steps += cfg.num_processes
 
                     self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).unsqueeze(-1).float().cuda())
                     self.rollouts.actions[step].copy_(torch.tensor(actions).unsqueeze(-1).long().cuda())
                     self.rollouts.values[step].copy_(v)
                     self.rollouts.rewards[step].copy_(torch.tensor(rewards).float().cuda())
-                    self.rollouts.obs[step + 1].copy_(states / 255.0)
+                    self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
 
                     for info in infos:
