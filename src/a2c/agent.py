@@ -30,7 +30,7 @@ class A2CAgent(BaseAgent):
         self.optimizer = torch.optim.RMSprop(self.network.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
         self.logger = EpochLogger(args.log_dir)
         self.reward_normalizer = SignNormalizer()
-        self.state_normalizer = ImageNormalizer
+        self.state_normalizer = ImageNormalizer()
 
 
 
