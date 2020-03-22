@@ -64,7 +64,7 @@ class A2CAgent(BaseAgent):
                     states, rewards, dones, infos = self.envs.step(actions)
                     steps += cfg.num_processes
 
-                    self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).unsqueeze(-1).float().cuda())
+                    self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).float().cuda())
                     self.rollouts.actions[step].copy_(torch.tensor(actions).unsqueeze(-1).long().cuda())
                     self.rollouts.values[step].copy_(v)
                     self.rollouts.rewards[step].copy_(torch.tensor(rewards).float().cuda())
