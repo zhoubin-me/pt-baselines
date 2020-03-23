@@ -4,7 +4,7 @@ import torch.multiprocessing as mp
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.deepq.deepq import RainbowAgent
+from src.deepq.agent import RainbowAgent
 
 
 class Config:

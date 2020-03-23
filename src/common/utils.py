@@ -76,22 +76,7 @@ def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000,
 
 
 
-
-def make_a2c_env(env_id, seed, rank, log_dir, allow_early_resets):
-    def _thunk():
-        env = make_atari(env_id)
-        env.seed(seed + rank)
-        env = Monitor(env, os.path.join(log_dir, str(rank)), allow_early_resets=allow_early_resets)
-        env = wrap_deepmind(env, episode_life=True, clip_rewards=True, transpose_image=True)
-        return env
-    return _thunk
-
-
-def make_vec_envs(game,
-                  seed,
-                  num_processes,
-                  log_dir,
-                  allow_early_resets):
+def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False):
 
     envs = [
         make_deepq_env(game, log_prefix=f'{log_dir}/rank_{i}', seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets)

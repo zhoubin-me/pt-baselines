@@ -366,7 +366,7 @@ def wrap_deepmind(env, episode_life=False, clip_rewards=False, frame_stack=False
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
     env = WarpFrame(env)
-    if len(env.observation_space.shape) == 3 and transpose_image:
+    if transpose_image:
         env = TransposeImage(env)
     if scale:
         env = ScaledFloatFrame(env)
