@@ -20,8 +20,8 @@ class A2CAgent(BaseAgent):
     def __init__(self, args):
         super(A2CAgent, self).__init__(args)
 
-        self.envs = make_vec_env(args.game, args.log_dir, record_video=False, seed=args.seed, num_processes=args.num_processes, gamma=args.gamma)
-        # self.envs = make_vec_envs(args.game, args.seed, args.num_processes, args.gamma, args.log_dir, torch.device(args.device_id), False)
+        # self.envs = make_vec_env(args.game, args.log_dir, record_video=False, seed=args.seed, num_processes=args.num_processes, gamma=args.gamma)
+        self.envs = make_vec_env(args.game, args.seed, args.num_processes, args.gamma, args.log_dir, torch.device(args.device_id), False)
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
         self.optimizer = torch.optim.RMSprop(self.network.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
