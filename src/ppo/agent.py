@@ -15,9 +15,9 @@ from src.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
-class A2CAgent(BaseAgent):
+class PPOAgent(BaseAgent):
     def __init__(self, cfg):
-        super(A2CAgent, self).__init__(cfg)
+        super(PPOAgent, self).__init__(cfg)
 
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
@@ -35,8 +35,6 @@ class A2CAgent(BaseAgent):
             masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
             returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
         )
-
-
 
         self.total_steps = 0
 
@@ -120,5 +118,6 @@ class A2CAgent(BaseAgent):
                                    (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
+
 
 
