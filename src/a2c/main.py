@@ -27,6 +27,7 @@ class Config:
     max_steps = int(5e7)
     log_interval = 8000
     eval_episodes = 10
+    use_lr_decay = False
 
     ckpt = ""
     log_dir = ""

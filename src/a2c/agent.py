@@ -8,6 +8,7 @@ from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
 from .model import ACNet
 from src.common.logger import EpochLogger
+from src.common.schedule import LinearSchedule
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
@@ -20,6 +21,13 @@ class A2CAgent(BaseAgent):
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
         self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
+
+        if cfg.use_lr_decay:
+            scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(scheduler)
+        else:
+            self.lr_scheduler = None
+
         self.logger = EpochLogger(cfg.log_dir)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
@@ -81,10 +89,10 @@ class A2CAgent(BaseAgent):
 
         advs = self.rollouts.returns[:-1] - vs
         value_loss = advs.pow(2).mean()
+        action_loss = (advs.detach() * log_probs).mean().neg()
+        entropy = dist.entropy().mean()
 
-        action_loss = 0 - (advs.detach() * log_probs + dist.entropy() * cfg.entropy_coef).mean()
-
-        loss = value_loss * cfg.value_loss_coef + action_loss
+        loss = value_loss * cfg.value_loss_coef + action_loss - cfg.entropy_coef * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -95,7 +103,7 @@ class A2CAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
-        return value_loss.item(), action_loss.item(), dist.entropy().mean().item(), loss.item()
+        return value_loss.item(), action_loss.item(), entropy.item(), loss.item()
 
 
     def run(self):
@@ -108,6 +116,8 @@ class A2CAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
             # Sample experiences
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step()
 
             self.step()
             vloss, ploss, entropy, loss = self.update()
