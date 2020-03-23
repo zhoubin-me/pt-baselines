@@ -3,11 +3,6 @@ import gym
 import torch
 
 from src.common.vec_env import VecEnvWrapper
-from src.common.vec_env.vec_normalize import \
-    VecNormalize as VecNormalize_
-
-
-
 
 
 class VecPyTorch(VecEnvWrapper):
@@ -32,32 +27,10 @@ class VecPyTorch(VecEnvWrapper):
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
         obs = torch.from_numpy(obs).float().to(self.device)
-        reward = torch.from_numpy(reward).unsqueeze(dim=1).float().to(self.device)
-        done = torch.from_numpy(done).unsqueeze(dim=1).float().to(self.device)
+        reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
         return obs, reward, done, info
 
 
-class VecNormalize(VecNormalize_):
-    def __init__(self, *args, **kwargs):
-        super(VecNormalize, self).__init__(*args, **kwargs)
-        self.training = True
-
-    def _obfilt(self, obs, update=True):
-        if self.ob_rms:
-            if self.training and update:
-                self.ob_rms.update(obs)
-            obs = np.clip((obs - self.ob_rms.mean) /
-                          np.sqrt(self.ob_rms.var + self.epsilon),
-                          -self.clipob, self.clipob)
-            return obs
-        else:
-            return obs
-
-    def train(self):
-        self.training = True
-
-    def eval(self):
-        self.training = False
 
 
 # Derived from
@@ -78,8 +51,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         self.stacked_obs = torch.zeros((venv.num_envs, ) +
                                        low.shape).to(device)
 
-        self.device = device
-
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
         VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
@@ -97,7 +68,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
     def reset(self):
         obs = self.venv.reset()
         if torch.backends.cudnn.deterministic:
-            self.stacked_obs = torch.zeros(self.stacked_obs.shape).to(self.device)
+            self.stacked_obs = torch.zeros(self.stacked_obs.shape)
         else:
             self.stacked_obs.zero_()
         self.stacked_obs[:, -self.shape_dim0:] = obs
