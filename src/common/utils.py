@@ -91,8 +91,8 @@ def make_vec_envs(game,
     else:
         envs = DummyVecEnv(envs)
 
-    envs = VecNormalize(envs, gamma=gamma)
-    envs = VecPyTorch(envs, torch.device(0))
-    envs = VecPyTorchFrameStack(envs, 4, torch.device(0))
+    # envs = VecNormalize(envs, gamma)
+    envs = VecPyTorch(envs, None)
+    envs = VecPyTorchFrameStack(envs, 4, None)
     return envs
 
