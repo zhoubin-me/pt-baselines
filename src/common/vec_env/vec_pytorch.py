@@ -27,6 +27,7 @@ class VecPyTorch(VecEnvWrapper):
         obs, reward, done, info = self.venv.step_wait()
         obs = torch.from_numpy(obs).float().cuda()
         reward = torch.from_numpy(reward).unsqueeze(dim=1).float().cuda()
+        done = torch.from_numpy(done).unsqueeze(dim=-1).float().cuda()
         return obs, reward, done, info
 
 
