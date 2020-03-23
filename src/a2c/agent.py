@@ -52,7 +52,7 @@ class A2CAgent(BaseAgent):
                 self.rollouts.masks[step + 1].copy_(1 - dones)
                 self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
                 self.rollouts.values[step].copy_(v)
-                self.rollouts.action_log_probs[step].copy_(action_log_probs)
+                self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
                 self.rollouts.rewards[step].copy_(rewards)
                 self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
