@@ -7,15 +7,16 @@ from src.ppo.agent import PPOAgent
 
 class Config:
     game = "Pong"
-    seed = 0
+    seed = 1234
 
     num_processes = 8
     recurrent = True
 
     nsteps = 128
     gamma = 0.99
-    adam_lr = 2.5e-4
-    adam_eps = 1e-5
+    lr = 2.5e-4
+    eps = 1e-5
+    alpha = 0.99
     epoches = 4
     mini_batch_size = 4
 
@@ -52,7 +53,7 @@ if __name__ == '__main__':
         args.log_dir = f'log/ppo-{args.game}-{args.seed}-eval/'
 
     # random_seed(args.seed)
-    # set_thread(1)
+    set_thread(1)
 
     mkdir(args.log_dir)
     agent = PPOAgent(cfg=args)

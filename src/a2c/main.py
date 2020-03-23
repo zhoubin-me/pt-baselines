@@ -14,9 +14,9 @@ class Config:
 
     nsteps = 5
     gamma = 0.99
-    rms_lr = 7e-4
-    rms_eps = 1e-5
-    rms_alpha = 0.99
+    lr = 7e-4
+    eps = 1e-5
+    alpha = 0.99
 
     gae_lambda = 0.95
     entropy_coef = 0.01
