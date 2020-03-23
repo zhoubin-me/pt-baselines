@@ -76,8 +76,6 @@ def make_vec_env(game,
                  num_processes=16,
                  gamma=0.99,
                  ):
-
-
     envs = [make_deepq_env(game,
                            f"{log_prefix}/rank_{i}",
                            record_video=record_video,
@@ -91,7 +89,7 @@ def make_vec_env(game,
     else:
         envs = DummyVecEnv(envs)
 
-    envs = VecNormalize(envs, gamma=gamma)
+    # envs = VecNormalize(envs, gamma=gamma)
     envs = VecPyTorch(envs, torch.device(0))
     envs = VecPyTorchFrameStack(envs, 4, torch.device(0))
     return envs
