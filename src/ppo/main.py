@@ -31,7 +31,7 @@ class Config:
     max_steps = int(5e7)
     log_interval = 8000
     eval_episodes = 10
-    use_linear_lr_decay = True
+    use_lr_decay = True
 
     ckpt = ""
     log_dir = ""
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     if len(args.ckpt) > 0:
         args.log_dir = f'log/ppo-{args.game}-{args.seed}-eval/'
 
-    # random_seed(args.seed)
+    random_seed(args.seed)
     set_thread(1)
 
     mkdir(args.log_dir)
