@@ -24,7 +24,7 @@ class A2CAgent(BaseAgent):
 
         if cfg.use_lr_decay:
             scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(scheduler)
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
         else:
             self.lr_scheduler = None
 
