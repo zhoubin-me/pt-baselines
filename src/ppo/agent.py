@@ -8,7 +8,7 @@ import numpy as np
 from collections import deque, namedtuple
 
 from src.common.base_agent import BaseAgent
-from .env import make_vec_envs
+from src.common.utils import make_vec_envs
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 from src.common.schedule import LinearSchedule
@@ -16,21 +16,21 @@ from .model import ACNet
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
-class A2CAgent(BaseAgent):
+class PPOAgent(BaseAgent):
     def __init__(self, cfg):
-        super(A2CAgent, self).__init__(cfg)
+        super(PPOAgent, self).__init__(cfg)
 
         self.envs = make_vec_envs(cfg.game,
+                                  cfg.log_dir,
+                                  record_video=False,
                                   seed=cfg.seed,
                                   num_processes=cfg.num_processes,
-                                  gamma=cfg.gamma,
-                                  log_dir=cfg.log_dir,
-                                  device=torch.device(0))
+                                  gamma=cfg.gamma)
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
+        self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps)
         self.lr_schedule = LinearSchedule(cfg.rms_lr, 0, cfg.max_steps // cfg.num_processes)
-        self.optimizer_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=self.lr_schedule)
+        self.optimizer_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer)
         self.logger = EpochLogger(cfg.log_dir)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()

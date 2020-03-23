@@ -2,33 +2,32 @@ import argparse
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from .agent import A2CAgent
+from .agent import PPOAgent
 
 
 class Config:
     game = 'Pong'
     seed = 0
 
-    num_processes = 16
+    num_processes = 8
     recurrent = True
 
-    nsteps = 5
+    nsteps = 128
     gamma = 0.99
-    rms_lr = 7e-4
+    adam_lr = 2.5e-4
     rms_eps = 1e-5
     rms_alpha = 0.99
-    num_mini_batch = 32
 
     gae_lambda = 0.95
     entropy_coef = 0.01
     value_loss_coef = 0.5
-    max_grad_norm = 0.5
+    max_grad_norm = 0.1
 
     max_episode_steps = 108000
-    max_steps = int(5e7)
+    max_steps = int(1e6)
     log_interval = 8000
     eval_episodes = 10
-    lr_decrease_schedule = False
+    lr_decrease_schedule = True
 
     ckpt = ""
     log_dir = ""
@@ -54,7 +53,7 @@ if __name__ == '__main__':
     # set_thread(1)
 
     mkdir(args.log_dir)
-    agent = A2CAgent(cfg=args)
+    agent = PPOAgent(args=args)
     # agent.logger.save_config(args)
 
     if not args.play:
