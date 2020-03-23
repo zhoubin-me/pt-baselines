@@ -7,6 +7,7 @@ from src.a2c.a2c import A2CAgent
 
 class Config:
     game = 'PongNoFrameskip-v4'
+    # game = "Pong"
     seed = 0
 
     num_processes = 16
