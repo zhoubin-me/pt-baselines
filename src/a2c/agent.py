@@ -52,7 +52,7 @@ class A2CAgent(BaseAgent):
                 self.rollouts.masks[step + 1].copy_(1 - dones)
                 self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
                 self.rollouts.values[step].copy_(v)
-                self.rollouts.action_log_probs[step].copy_(action_log_probs)
+                self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
                 self.rollouts.rewards[step].copy_(rewards)
                 self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
@@ -82,9 +82,9 @@ class A2CAgent(BaseAgent):
         advs = self.rollouts.returns[:-1] - vs
         value_loss = advs.pow(2).mean()
 
-        action_loss = 0 - (advs.detach() * log_probs + dist.entropy() * cfg.entropy_coef).mean()
-
-        loss = value_loss * cfg.value_loss_coef + action_loss
+        entropy = dist.entropy().mean()
+        action_loss = (advs.detach() * log_probs).mean().neg()
+        loss = value_loss * cfg.value_loss_coef + action_loss - entropy * cfg.entropy_coef
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -95,11 +95,13 @@ class A2CAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
+        return value_loss.item(), action_loss.item(), entropy.item(), loss.item()
+
 
     def run(self):
         cfg = self.cfg
         logger = self.logger
-        logger.store(TrainEpRet=0, Loss=0)
+        logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
 
         states = self.envs.reset()
@@ -108,7 +110,11 @@ class A2CAgent(BaseAgent):
             # Sample experiences
 
             self.step()
-            self.update()
+            vloss, ploss, entropy, loss = self.update()
+            logger.store(VLoss=vloss)
+            logger.store(PLoss=ploss)
+            logger.store(Entropy=entropy)
+            logger.store(Loss=loss)
 
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
@@ -116,6 +122,9 @@ class A2CAgent(BaseAgent):
                 logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
                 logger.log_tabular('TrainEpRet', with_min_and_max=True)
                 logger.log_tabular('Loss', average_only=True)
+                logger.log_tabular('VLoss', average_only=True)
+                logger.log_tabular('PLoss', average_only=True)
+                logger.log_tabular('Entropy', average_only=True)
                 logger.log_tabular('RemHrs',
                                    (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()
