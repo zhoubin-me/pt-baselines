@@ -91,6 +91,7 @@ def make_vec_envs(game,
     else:
         envs = DummyVecEnv(envs)
 
+    # For atari no need normalization
     # envs = VecNormalize(envs, gamma)
     envs = VecPyTorch(envs, None)
     envs = VecPyTorchFrameStack(envs, 4, None)
