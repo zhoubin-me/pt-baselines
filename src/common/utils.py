@@ -68,34 +68,34 @@ def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000,
 
 
 
-
-def make_vec_envs(game,
-                 log_prefix,
-                 record_video=False,
-                 max_episode_steps=108000,
-                 seed=1234,
-                 num_processes=16,
-                 gamma=0.99,
-                 ):
-
-
-    envs = [make_deepq_env(game,
-                           f"{log_prefix}/rank_{i}",
-                           record_video=record_video,
-                           max_episode_steps=max_episode_steps,
-                           seed=seed+i,
-                           frame_stack=False,
-                           transpose_image=True) for i in range(num_processes)]
-
-    if len(envs) > 1:
-        envs = ShmemVecEnv(envs, context='fork')
-    else:
-        envs = DummyVecEnv(envs)
-
-    # envs = VecNormalize(envs, gamma)
-    envs = VecPyTorch(envs, None)
-    envs = VecPyTorchFrameStack(envs, 4, None)
-    return envs
+#
+# def make_vec_envs(game,
+#                  log_prefix,
+#                  record_video=False,
+#                  max_episode_steps=108000,
+#                  seed=1234,
+#                  num_processes=16,
+#                  gamma=0.99,
+#                  ):
+#
+#
+#     envs = [make_deepq_env(game,
+#                            f"{log_prefix}/rank_{i}",
+#                            record_video=record_video,
+#                            max_episode_steps=max_episode_steps,
+#                            seed=seed+i,
+#                            frame_stack=False,
+#                            transpose_image=True) for i in range(num_processes)]
+#
+#     if len(envs) > 1:
+#         envs = ShmemVecEnv(envs, context='fork')
+#     else:
+#         envs = DummyVecEnv(envs)
+#
+#     # envs = VecNormalize(envs, gamma)
+#     envs = VecPyTorch(envs, None)
+#     envs = VecPyTorchFrameStack(envs, 4, None)
+#     return envs
 
 def make_env(env_id, seed, rank, log_dir, allow_early_resets):
     def _thunk():
@@ -109,7 +109,7 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets):
     return _thunk
 
 
-def make_vec_envs(env_name,
+def make_vec_env(env_name,
                   seed,
                   num_processes,
                   gamma,
