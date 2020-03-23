@@ -8,7 +8,7 @@ from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 class PPOAgent(A2CAgent):
     def __init__(self, cfg):
-        super(A2CAgent, self).__init__(cfg)
+        super(PPOAgent, self).__init__(cfg)
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
