@@ -6,9 +6,10 @@ import gym
 from pathlib import Path
 
 from gym import wrappers
-from src.common.atari_wrapper import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit
+from src.common.atari_wrapper import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit, TransposeImage
 from src.common.monitor import Monitor
 from src.common.vec_env import VecNormalize, ShmemVecEnv, VecPyTorch, DummyVecEnv, VecPyTorchFrameStack
+
 
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -68,7 +69,7 @@ def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000,
 
 
 
-def make_vec_env(game,
+def make_vec_envs(game,
                  log_prefix,
                  record_video=False,
                  max_episode_steps=108000,
@@ -76,6 +77,8 @@ def make_vec_env(game,
                  num_processes=16,
                  gamma=0.99,
                  ):
+
+
     envs = [make_deepq_env(game,
                            f"{log_prefix}/rank_{i}",
                            record_video=record_video,
@@ -89,8 +92,38 @@ def make_vec_env(game,
     else:
         envs = DummyVecEnv(envs)
 
-    # envs = VecNormalize(envs, gamma=gamma)
-    envs = VecPyTorch(envs, torch.device(0))
-    envs = VecPyTorchFrameStack(envs, 4, torch.device(0))
+    # envs = VecNormalize(envs, gamma)
+    envs = VecPyTorch(envs, None)
+    envs = VecPyTorchFrameStack(envs, 4, None)
     return envs
 
+def make_env(env_id, seed, rank, log_dir, allow_early_resets):
+    def _thunk():
+
+        env = gym.make(env_id)
+        env = make_atari(env_id)
+        env.seed(seed + rank)
+        env = Monitor( env, os.path.join(log_dir, str(rank)), allow_early_resets=allow_early_resets)
+        env = wrap_deepmind(env, episode_life=True, clip_rewards=True)
+        return env
+    return _thunk
+
+
+def make_vec_envs(env_name,
+                  seed,
+                  num_processes,
+                  gamma,
+                  log_dir,
+                  device,
+                  allow_early_resets):
+
+
+    envs = [
+        make_env(env_name, seed, i, log_dir, allow_early_resets)
+        for i in range(num_processes)
+    ]
+
+    envs = ShmemVecEnv(envs, context='fork')
+    envs = VecPyTorch(envs, device)
+    envs = VecPyTorchFrameStack(envs, 4, device)
+    return envs
