@@ -16,25 +16,24 @@ from src.common.normalizer import SignNormalizer, ImageNormalizer
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
 class A2CAgent(BaseAgent):
-    def __init__(self, args):
-        super(A2CAgent, self).__init__(args)
+    def __init__(self, cfg):
+        super(A2CAgent, self).__init__(cfg)
 
-        # self.envs = make_vec_env(args.game, args.log_dir, record_video=False, seed=args.seed, num_processes=args.num_processes, gamma=args.gamma)
-        self.envs = make_vec_envs(args.game, args.seed, args.num_processes, args.gamma, args.log_dir, torch.device(args.device_id), False)
+        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
-        self.logger = EpochLogger(args.log_dir)
+        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
+        self.logger = EpochLogger(cfg.log_dir)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
 
         self.rollouts = Rollouts(
-            obs = torch.zeros(args.nsteps + 1, args.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(args.nsteps, args.num_processes, 1).cuda(),
-            values = torch.zeros(args.nsteps + 1, args.num_processes, 1).cuda(),
-            rewards = torch.zeros(args.nsteps, args.num_processes, 1).cuda(),
-            masks = torch.zeros(args.nsteps + 1, args.num_processes, 1).cuda(),
-            returns = torch.zeros(args.nsteps + 1, args.num_processes, 1).cuda()
+            obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
+            actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+            values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
+            rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+            masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
+            returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
         )
 
 
@@ -55,7 +54,6 @@ class A2CAgent(BaseAgent):
                     actions = Categorical(logits=pi).sample()
 
                     states, rewards, dones, infos = self.envs.step(actions)
-                    # rewards = self.reward_normalizer(rewards)
                     steps += cfg.num_processes
 
                     self.rollouts.masks[step + 1].copy_(torch.tensor(1 - dones).unsqueeze(-1).float().cuda())

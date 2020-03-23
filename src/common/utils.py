@@ -39,12 +39,21 @@ def random_seed(seed=None):
     torch.manual_seed(np.random.randint(int(1e6)))
 
 
-def make_deepq_env(game, log_prefix, record_video=False, max_episode_steps=108000, seed=1234, frame_stack=True, transpose_image=True):
+def make_deepq_env(game,
+                   log_prefix,
+                   record_video=False,
+                   max_episode_steps=108000,
+                   seed=1234,
+                   frame_stack=True,
+                   episode_life=True,
+                   transpose_image=True,
+                   clip_rewards=True,
+                   allow_early_resets=True):
     def trunk():
         env = make_atari(f'{game}NoFrameskip-v4', max_episode_steps)
         env.seed(seed)
-        env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrap_deepmind(env, episode_life=not record_video, frame_stack=frame_stack, transpose_image=transpose_image)
+        env = Monitor(env=env, filename=log_prefix, allow_early_resets=allow_early_resets)
+        env = wrap_deepmind(env, episode_life=episode_life, clip_rewards=clip_rewards, frame_stack=frame_stack, transpose_image=transpose_image)
         if record_video:
             env = wrappers.Monitor(env, f'{log_prefix}', force=True)
         return env
@@ -70,7 +79,6 @@ def make_a3c_env(game, log_prefix, record_video=False, max_episode_steps=108000,
 
 def make_a2c_env(env_id, seed, rank, log_dir, allow_early_resets):
     def _thunk():
-        env = gym.make(env_id)
         env = make_atari(env_id)
         env.seed(seed + rank)
         env = Monitor(env, os.path.join(log_dir, str(rank)), allow_early_resets=allow_early_resets)
@@ -79,16 +87,15 @@ def make_a2c_env(env_id, seed, rank, log_dir, allow_early_resets):
     return _thunk
 
 
-def make_vec_envs(env_name,
+def make_vec_envs(game,
                   seed,
                   num_processes,
-                  gamma,
                   log_dir,
                   device,
                   allow_early_resets):
 
     envs = [
-        make_a2c_env(env_name, seed, i, log_dir, allow_early_resets)
+        make_deepq_env(game, log_prefix=f'{log_dir}/rank_{i}', seed=seed+i, allow_early_resets=allow_early_resets)
         for i in range(num_processes)
     ]
 

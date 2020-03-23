@@ -6,8 +6,7 @@ from src.a2c.a2c import A2CAgent
 
 
 class Config:
-    game = 'PongNoFrameskip-v4'
-    # game = "Pong"
+    game = "Pong"
     seed = 0
 
     num_processes = 16
@@ -53,7 +52,7 @@ if __name__ == '__main__':
     # set_thread(1)
 
     mkdir(args.log_dir)
-    agent = A2CAgent(args=args)
+    agent = A2CAgent(cfg=args)
     # agent.logger.save_config(args)
 
     if not args.play:

@@ -14,7 +14,7 @@ class VecPyTorch(VecEnvWrapper):
 
     def reset(self):
         obs = self.venv.reset()
-        obs = torch.from_numpy(obs).float().to(self.device)
+        obs = torch.from_numpy(obs).float().cuda()
         return obs
 
     def step_async(self, actions):
@@ -26,8 +26,8 @@ class VecPyTorch(VecEnvWrapper):
 
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
-        obs = torch.from_numpy(obs).float().to(self.device)
-        reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
+        obs = torch.from_numpy(obs).float().cuda()
+        reward = torch.from_numpy(reward).unsqueeze(dim=1).float().cuda()
         return obs, reward, done, info
 
 
@@ -49,7 +49,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         if device is None:
             device = torch.device('cpu')
         self.stacked_obs = torch.zeros((venv.num_envs, ) +
-                                       low.shape).to(device)
+                                       low.shape).cuda()
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
