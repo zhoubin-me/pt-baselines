@@ -94,7 +94,7 @@ def make_vec_envs(game,
                   allow_early_resets):
 
     envs = [
-        make_deepq_env(game, log_prefix=f'{log_dir}/rank_{i}', seed=seed+i, allow_early_resets=allow_early_resets)
+        make_deepq_env(game, log_prefix=f'{log_dir}/rank_{i}', seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets)
         for i in range(num_processes)
     ]
 
