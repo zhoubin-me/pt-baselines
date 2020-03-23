@@ -91,7 +91,6 @@ def make_vec_envs(game,
                   seed,
                   num_processes,
                   log_dir,
-                  device,
                   allow_early_resets):
 
     envs = [
@@ -100,6 +99,6 @@ def make_vec_envs(game,
     ]
 
     envs = ShmemVecEnv(envs, context='fork')
-    envs = VecPyTorch(envs, device)
-    envs = VecPyTorchFrameStack(envs, 4, device)
+    envs = VecPyTorch(envs)
+    envs = VecPyTorchFrameStack(envs, 4)
     return envs

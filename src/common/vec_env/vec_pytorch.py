@@ -6,10 +6,9 @@ from src.common.vec_env import VecEnvWrapper
 
 
 class VecPyTorch(VecEnvWrapper):
-    def __init__(self, venv, device):
+    def __init__(self, venv):
         """Return only every `skip`-th frame"""
         super(VecPyTorch, self).__init__(venv)
-        self.device = device
         # TODO: Fix data types
 
     def reset(self):
@@ -36,7 +35,7 @@ class VecPyTorch(VecEnvWrapper):
 # Derived from
 # https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
-    def __init__(self, venv, nstack, device=None):
+    def __init__(self, venv, nstack):
         self.venv = venv
         self.nstack = nstack
 
@@ -46,8 +45,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        if device is None:
-            device = torch.device('cpu')
         self.stacked_obs = torch.zeros((venv.num_envs, ) +
                                        low.shape).cuda()
 
