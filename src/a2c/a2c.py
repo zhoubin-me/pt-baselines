@@ -8,11 +8,10 @@ import numpy as np
 from collections import deque, namedtuple
 
 from src.common.base_agent import BaseAgent
-from .env import make_vec_envs
-from src.common.utils import make_vec_env
+from src.common.utils import make_vec_envs
 from .model import ACNet
 from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer
+from src.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
@@ -27,8 +26,7 @@ class A2CAgent(BaseAgent):
         self.optimizer = torch.optim.RMSprop(self.network.parameters(), args.rms_lr, eps=args.rms_eps, alpha=args.rms_alpha)
         self.logger = EpochLogger(args.log_dir)
         self.reward_normalizer = SignNormalizer()
-
-
+        self.state_normalizer = ImageNormalizer()
 
         self.rollouts = Rollouts(
             obs = torch.zeros(args.nsteps + 1, args.num_processes,  * self.envs.observation_space.shape).cuda(),
@@ -41,14 +39,13 @@ class A2CAgent(BaseAgent):
 
 
     def run(self):
-
         cfg = self.cfg
         logger = self.logger
         logger.store(TrainEpRet=0, Loss=0)
         t0 = time.time()
 
         states = self.envs.reset()
-        self.rollouts.obs[0].copy_(states / 255.0)
+        self.rollouts.obs[0].copy_(self.state_normalizer(states))
         steps = 0
         while steps < cfg.max_steps:
             # Sample experiences
@@ -65,7 +62,7 @@ class A2CAgent(BaseAgent):
                     self.rollouts.actions[step].copy_(torch.tensor(actions).unsqueeze(-1).long().cuda())
                     self.rollouts.values[step].copy_(v)
                     self.rollouts.rewards[step].copy_(torch.tensor(rewards).float().cuda())
-                    self.rollouts.obs[step + 1].copy_(states / 255.0)
+                    self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
 
                     for info in infos:
