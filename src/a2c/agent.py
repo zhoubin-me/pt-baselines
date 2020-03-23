@@ -1,11 +1,8 @@
 import torch
-import torch.nn.functional as F
-import torch.multiprocessing as mp
 from torch.distributions import Categorical
 
 import time
-import numpy as np
-from collections import deque, namedtuple
+from collections import namedtuple
 
 from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
@@ -13,7 +10,7 @@ from .model import ACNet
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 
-Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
+Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
 
 class A2CAgent(BaseAgent):
     def __init__(self, cfg):
@@ -30,6 +27,7 @@ class A2CAgent(BaseAgent):
         self.rollouts = Rollouts(
             obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
             actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
             values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
             rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
             masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
@@ -45,14 +43,16 @@ class A2CAgent(BaseAgent):
         with torch.no_grad():
             for step in range(cfg.nsteps):
                 v, pi = self.network(self.rollouts.obs[step])
-                actions = Categorical(logits=pi).sample()
-
+                dist = Categorical(logits=pi)
+                actions = dist.sample()
+                action_log_probs = dist.log_prob(actions)
                 states, rewards, dones, infos = self.envs.step(actions)
                 self.total_steps += cfg.num_processes
 
                 self.rollouts.masks[step + 1].copy_(1 - dones)
                 self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
                 self.rollouts.values[step].copy_(v)
+                self.rollouts.action_log_probs[step].copy_(action_log_probs)
                 self.rollouts.rewards[step].copy_(rewards)
                 self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 

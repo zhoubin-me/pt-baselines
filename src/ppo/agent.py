@@ -1,75 +1,39 @@
 import torch
-import torch.nn.functional as F
-import torch.multiprocessing as mp
 from torch.distributions import Categorical
 
-import time
-import numpy as np
-from collections import deque, namedtuple
+from src.a2c.agent import A2CAgent
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-from src.common.base_agent import BaseAgent
-from src.common.utils import make_vec_envs
-from .model import ACNet
-from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer, ImageNormalizer
 
-Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'rewards', 'values', 'masks', 'returns'])
 
-class PPOAgent(BaseAgent):
+class PPOAgent(A2CAgent):
     def __init__(self, cfg):
-        super(PPOAgent, self).__init__(cfg)
+        super(A2CAgent, self).__init__(cfg)
+        self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.adam_lr, eps=cfg.adam_eps)
 
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
-        self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
-        self.logger = EpochLogger(cfg.log_dir)
-        self.reward_normalizer = SignNormalizer()
-        self.state_normalizer = ImageNormalizer()
-
-        self.rollouts = Rollouts(
-            obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
-        )
-
-        self.total_steps = 0
-
-    def step(self):
+    def sample(self):
         cfg = self.cfg
-        with torch.no_grad():
-            for step in range(cfg.nsteps):
-                v, pi = self.network(self.rollouts.obs[step])
-                actions = Categorical(logits=pi).sample()
+        rollouts = self.rollouts
+        batch_size = cfg.num_processes * cfg.nsteps
+        for epoch in range(cfg.epoches):
+            sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), cfg.mini_batch_size, drop_last=True)
+            for indices in sampler:
+                obs_batch = rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape)[indices]
+                action_batch = rollouts.actions.view(-1, 1)[indices]
+                value_batch = rollouts.values[:-1].view(-1, 1)[indices]
+                mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]
+                returns_batch = rollouts.returns[:-1].view(-1, 1)[indices]
 
-                states, rewards, dones, infos = self.envs.step(actions)
-                self.total_steps += cfg.num_processes
-
-                self.rollouts.masks[step + 1].copy_(1 - dones)
-                self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
-                self.rollouts.values[step].copy_(v)
-                self.rollouts.rewards[step].copy_(rewards)
-                self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
-
-                for info in infos:
-                    if 'episode' in info:
-                        self.logger.store(TrainEpRet=info['episode']['r'])
-
-            # Compute R and GAE
-            v_next, _, = self.network(self.rollouts.obs[-1])
-            self.rollouts.values[-1].copy_(v_next)
-            gae = 0
-            for step in reversed(range(cfg.nsteps)):
-                delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
-                    step + 1] - self.rollouts.values[step]
-                gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
-                self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
 
     def update(self):
         cfg = self.cfg
+
+        advs = self.rollouts.returns[:-1] - self.rollouts.values[:-1]
+        advs = (advs - advs.mean()) / (advs.std() + 1e-5)
+
+
+
 
         vs, pis = self.network(self.rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape))
         vs = vs.view(cfg.nsteps, cfg.num_processes, 1)
@@ -93,31 +57,6 @@ class PPOAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
-
-    def run(self):
-        cfg = self.cfg
-        logger = self.logger
-        logger.store(TrainEpRet=0, Loss=0)
-        t0 = time.time()
-
-        states = self.envs.reset()
-        self.rollouts.obs[0].copy_(self.state_normalizer(states))
-        while self.total_steps < cfg.max_steps:
-            # Sample experiences
-
-            self.step()
-            self.update()
-
-            if self.total_steps % cfg.log_interval == 0:
-                logger.log_tabular('TotalEnvInteracts', self.total_steps)
-                logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
-                logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
-                logger.log_tabular('TrainEpRet', with_min_and_max=True)
-                logger.log_tabular('Loss', average_only=True)
-                logger.log_tabular('RemHrs',
-                                   (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
-                t0 = time.time()
-                logger.dump_tabular(self.total_steps)
 
 
 

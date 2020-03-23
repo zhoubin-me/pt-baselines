@@ -31,7 +31,6 @@ class Config:
     ckpt = ""
     log_dir = ""
     play = False
-    device_id = 0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A2C Hyperparameters')

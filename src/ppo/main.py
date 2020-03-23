@@ -15,6 +15,8 @@ class Config:
     nsteps = 128
     gamma = 0.99
     adam_lr = 2.5e-4
+    adam_eps = 1e-5
+    epoches = 4
     mini_batch_size = 4
 
 
@@ -28,12 +30,11 @@ class Config:
     max_steps = int(5e7)
     log_interval = 8000
     eval_episodes = 10
+    use_linear_lr_decay = True
 
     ckpt = ""
     log_dir = ""
     play = False
-    use_linear_lr_decay = True
-    device_id = 0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PPO Hyperparameters')
