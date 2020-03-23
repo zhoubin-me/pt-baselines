@@ -18,13 +18,13 @@ class Config:
     adam_eps = 1e-5
     epoches = 4
     mini_batch_size = 4
-
+    clip_param = 0.1
 
     gae_lambda = 0.95
     entropy_coef = 0.01
     value_loss_coef = 0.5
     max_grad_norm = 0.5
-    clip_param = 0.1
+
 
     max_episode_steps = 108000
     max_steps = int(5e7)

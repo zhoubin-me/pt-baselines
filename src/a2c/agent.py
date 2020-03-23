@@ -6,9 +6,10 @@ from collections import namedtuple
 
 from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
-from .model import ACNet
+from src.common.schedule import LinearSchedule
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
+from .model import ACNet
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
 
@@ -19,7 +20,12 @@ class A2CAgent(BaseAgent):
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.rms_lr, eps=cfg.rms_eps, alpha=cfg.rms_alpha)
+        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
+        if cfg.use_linear_lr_decay:
+            scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
+        else:
+            self.lr_scheduler = None
         self.logger = EpochLogger(cfg.log_dir)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
@@ -108,6 +114,8 @@ class A2CAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
             # Sample experiences
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step()
 
             self.step()
             vloss, ploss, entropy, loss = self.update()
