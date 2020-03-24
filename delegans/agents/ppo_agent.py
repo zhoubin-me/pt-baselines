@@ -23,7 +23,7 @@ class PPOAgent(BaseAgent):
         # self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
         self.envs = make_vec_envs(f'{cfg.game}NoFrameskip-v4', seed=cfg.seed, num_processes=cfg.num_processes, gamma=cfg.gamma, log_dir=cfg.log_dir, device=torch.device(0), allow_early_resets=False)
         # self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.network = Policy(self.envs.observation_space.shape, self.envs.action_space, base_kwargs={'recurrent': False})
+        self.network = Policy(self.envs.observation_space.shape, self.envs.action_space, base_kwargs={'recurrent': False}).cuda()
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         # if cfg.use_lr_decay:
@@ -71,7 +71,7 @@ class PPOAgent(BaseAgent):
                 masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in dones]).cuda()
                 bad_masks = torch.FloatTensor([[0.0] if 'bad_transition' in info.keys() else [1.0] for info in infos]).cuda()
 
-                self.rollouts.insert(self.state_normalizer(states), recurrent_hidden_states, actions,
+                self.rollouts.insert(states, recurrent_hidden_states, actions,
                                 action_log_probs, values, rewards, masks, bad_masks)
 
                 for info in infos:
