@@ -6,7 +6,7 @@ from torch.distributions import Categorical
 from functools import partial
 
 
-def init(m, gain=1):
+def init(m, gain=1.0):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data, gain)
         nn.init.zeros_(m.bias.data)
@@ -22,15 +22,13 @@ class ACNet(nn.Module):
             nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
             nn.Linear(32 * 7 * 7, 512), nn.ReLU())
 
-        convs_init = partial(init, gain=nn.init.calculate_gain('relu'))
-        self.convs.apply(convs_init)
 
         self.fc_v = nn.Linear(512, 1)
         self.fc_pi = nn.Linear(512, action_dim)
 
-        self.fc_v.apply(init)
-        nn.init.orthogonal_(self.fc_pi.weight.data, gain=0.01)
-
+        self.convs.apply(lambda m: init(m, gain=nn.init.calculate_gain('relu')))
+        self.fc_v.apply(lambda m: init(m, gain=1.0))
+        self.fc_pi.apply(lambda m: init(m, gain=0.01))
 
     def forward(self, x):
         features = self.convs(x)
