@@ -6,7 +6,7 @@ from collections import namedtuple
 
 from src.common.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
-from .model import ACNet
+from src.common.model import ACNet
 from src.common.logger import EpochLogger
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import SignNormalizer, ImageNormalizer

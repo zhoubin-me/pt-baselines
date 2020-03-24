@@ -12,7 +12,7 @@ from src.common.utils import close_obj, tensor, make_deepq_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
 from src.common.logger import EpochLogger
-from src.deepq.model import C51Net
+from src.common.model import C51Net
 
 class RainbowActor(AsyncActor):
     def __init__(self, cfg, lock):
