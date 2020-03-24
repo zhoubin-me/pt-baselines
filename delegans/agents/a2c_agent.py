@@ -41,9 +41,8 @@ class A2CAgent(BaseAgent):
             returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
         )
 
-
-
         self.total_steps = 0
+
 
     def step(self):
         cfg = self.cfg
