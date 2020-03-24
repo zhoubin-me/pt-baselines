@@ -21,10 +21,11 @@ class PPOAgent(A2CAgent):
         cfg = self.cfg
         rollouts = self.rollouts
         batch_size = cfg.num_processes * cfg.nsteps
+        mini_batch_size = batch_size // cfg.num_mini_batch
 
         adv = self.rollouts.returns[:-1] - self.rollouts.values[:-1]
         adv = (adv - adv.mean()) / (adv.std() + 1e-5)
-        sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), cfg.mini_batch_size, drop_last=True)
+        sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=True)
 
         for indices in sampler:
             obs_batch = rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape)[indices]
