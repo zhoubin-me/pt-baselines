@@ -70,7 +70,7 @@ class A3CConfig:
 
 class A2CConfig:
     game = "Pong"
-    seed = 0
+    seed = 1
 
     num_processes = 16
     use_gae = False
