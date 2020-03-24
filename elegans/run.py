@@ -1,8 +1,8 @@
 import numpy as np
 import argparse
-from src.common.utils import random_seed, mkdir
-from src.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
-from src.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
+from elegans.common.utils import random_seed, mkdir
+from elegans.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
+from elegans.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
@@ -22,9 +22,10 @@ if __name__ == '__main__':
     if len(args.ckpt) > 0:
         args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
 
-    if args.seed == 0:
-        args.seed = 1
+    if args.seed > 0:
         random_seed(args.seed)
+    else:
+        args.seed = 0
 
     mkdir(args.log_dir)
     agent = eval(f'{args.algo}Agent(cfg=args)')

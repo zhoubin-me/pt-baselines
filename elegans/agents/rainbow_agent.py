@@ -5,14 +5,14 @@ import torch.multiprocessing as mp
 import numpy as np
 from collections import deque
 
-from src.agents.async_actor import AsyncActor
-from src.common.async_replay import AsyncReplayBuffer
-from src.agents.base_agent import BaseAgent
-from src.common.utils import close_obj, tensor, make_deepq_env
-from src.common.schedule import LinearSchedule
-from src.common.normalizer import ImageNormalizer, SignNormalizer
-from src.common.logger import EpochLogger
-from src.common.model import C51Net
+from elegans.agents.async_actor import AsyncActor
+from elegans.common.async_replay import AsyncReplayBuffer
+from elegans.agents.base_agent import BaseAgent
+from elegans.common.utils import close_obj, tensor, make_deepq_env
+from elegans.common.schedule import LinearSchedule
+from elegans.common.normalizer import ImageNormalizer, SignNormalizer
+from elegans.common.logger import EpochLogger
+from elegans.common.model import C51Net
 
 class RainbowActor(AsyncActor):
     def __init__(self, cfg, lock):

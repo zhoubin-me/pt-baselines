@@ -7,11 +7,11 @@ import numpy as np
 
 from collections import deque
 
-from src.agents.base_agent import BaseAgent
-from src.common.utils import close_obj, make_a3c_env
-from src.common.normalizer import SignNormalizer
-from src.common.logger import EpochLogger
-from src.common.model import LightACNet as ACNet
+from elegans.agents.base_agent import BaseAgent
+from elegans.common.utils import close_obj, make_a3c_env
+from elegans.common.normalizer import SignNormalizer
+from elegans.common.logger import EpochLogger
+from elegans.common.model import LightACNet as ACNet
 
 
 class A3CActor(mp.Process):
