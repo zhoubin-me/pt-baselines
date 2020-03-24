@@ -28,7 +28,7 @@ class A2CAgent(BaseAgent):
         else:
             self.lr_scheduler = None
 
-        self.logger = EpochLogger(cfg.log_dir)
+        self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
 

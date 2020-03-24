@@ -42,11 +42,11 @@ if __name__ == '__main__':
     print(args)
 
     if len(args.log_dir) == 0:
-        args.log_dir = f'log/a3c-{args.game}-{args.seed}/'
-        args.ckpt_dir = f'ckpt/a3c-{args.game}-{args.seed}/'
+        args.log_dir = f'log/a2c-{args.game}-{args.seed}/'
+        args.ckpt_dir = f'ckpt/a2c-{args.game}-{args.seed}/'
 
     if len(args.ckpt) > 0:
-        args.log_dir = f'log/a3c-{args.game}-{args.seed}-eval/'
+        args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
 
     random_seed(args.seed)
     # set_thread(1)

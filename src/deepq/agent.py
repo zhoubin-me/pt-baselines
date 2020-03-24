@@ -74,7 +74,7 @@ class RainbowAgent(BaseAgent):
             seed=cfg.seed
         )()
 
-        self.logger = EpochLogger(cfg.log_dir)
+        self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
         self.replay = AsyncReplayBuffer(
             buffer_size=cfg.replay_size,
             batch_size=cfg.batch_size,

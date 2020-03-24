@@ -12,7 +12,7 @@ class PPOAgent(A2CAgent):
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
-            scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
+            scheduler = LinearSchedule(1.0, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
             self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
         else:
             self.lr_scheduler = None
@@ -35,7 +35,6 @@ class PPOAgent(A2CAgent):
             mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]
             return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
             adv_batch = adv.view(-1, 1)[indices]
-
             yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, adv_batch
 
 
