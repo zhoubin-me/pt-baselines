@@ -1,10 +1,9 @@
 
 import argparse
-import torch.multiprocessing as mp
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.deepq.agent import RainbowAgent
+from src.agents.rainbow_agent import RainbowAgent
 
 
 class Config:

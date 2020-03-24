@@ -1,8 +1,8 @@
 import argparse
 import numpy as np
 
-from src.common.utils import set_thread, random_seed, mkdir
-from src.a2c.agent import A2CAgent
+from src.common.utils import random_seed, mkdir
+from src.agents.a2c_agent import A2CAgent
 
 
 class Config:

@@ -1,7 +1,7 @@
 import torch
 from torch.distributions import Categorical
 
-from src.a2c.agent import A2CAgent
+from src.agents.a2c_agent import A2CAgent
 from src.common.schedule import LinearSchedule
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 

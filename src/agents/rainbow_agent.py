@@ -5,9 +5,9 @@ import torch.multiprocessing as mp
 import numpy as np
 from collections import deque
 
-from src.common.async_actor import AsyncActor
+from src.agents.async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.common.base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent
 from src.common.utils import close_obj, tensor, make_deepq_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer

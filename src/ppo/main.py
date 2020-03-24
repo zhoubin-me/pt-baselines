@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 
 from src.common.utils import set_thread, random_seed, mkdir
-from src.ppo.agent import PPOAgent
+from src.agents.ppo_agent import PPOAgent
 
 
 class Config:

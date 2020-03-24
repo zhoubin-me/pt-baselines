@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 import torch.multiprocessing as mp
 from torch.distributions import Categorical
 
@@ -8,8 +7,8 @@ import numpy as np
 
 from collections import deque
 
-from src.common.base_agent import BaseAgent
-from src.common.utils import close_obj, tensor, make_a3c_env
+from src.agents.base_agent import BaseAgent
+from src.common.utils import close_obj, make_a3c_env
 from src.common.normalizer import SignNormalizer
 from src.common.logger import EpochLogger
 from src.common.model import LightACNet as ACNet

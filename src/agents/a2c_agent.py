@@ -4,7 +4,7 @@ from torch.distributions import Categorical
 import time
 from collections import namedtuple
 
-from src.common.base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
 from src.common.model import ACNet
 from src.common.logger import EpochLogger

@@ -1,12 +1,8 @@
 import numpy as np
 import argparse
-from src.common.utils import set_thread, random_seed, mkdir
-from src.a2c.agent import A2CAgent
-from src.a3c.agent import A3CAgent
-from src.ppo.agent import PPOAgent
-from src.deepq.agent import RainbowAgent
-from .config import RainbowConfig, A2CConfig, A3CConfig, PPOConfig
-
+from src.common.utils import random_seed, mkdir
+from src.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
+from src.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
