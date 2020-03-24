@@ -119,7 +119,7 @@ class Logger:
     state of a training run, and the trained model.
     """
 
-    def __init__(self, output_dir=None, output_fname='progress.txt', exp_name=None, test_fname='test.txt'):
+    def __init__(self, output_dir=None, output_fname='progress.txt', exp_name=None, test_fname='val.txt'):
         """
         Initialize a Logger.
 
