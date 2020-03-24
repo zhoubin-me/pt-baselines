@@ -10,9 +10,10 @@ class Test(unittest.TestCase):
         from delegans.common.schedule import LinearSchedule
         net = ACNet(4, 4)
 
+        num_updates = int(1e7) // (8 * 128)
         optimizer = torch.optim.Adam(net.parameters(), 2.5e-4)
         scheduler = LinearSchedule(1, 0, int(1e7) // (8 * 128))
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, int(1e7) // (8 * 128))
+        lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: (1 - epoch / num_updates))
         print(int(1e7) // (8 * 128))
         for step in range(int(1e7) // (8 * 128)):
 

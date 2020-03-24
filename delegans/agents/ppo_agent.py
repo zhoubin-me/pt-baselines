@@ -25,8 +25,8 @@ class PPOAgent(BaseAgent):
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
-            scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
+            num_updates = cfg.max_steps // (cfg.nsteps * cfg.num_processes)
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lambda epoch: (1 - epoch / num_updates))
         else:
             self.lr_scheduler = None
 
@@ -152,6 +152,8 @@ class PPOAgent(BaseAgent):
                 loss_epoch += loss.item()
 
         num_updates = cfg.epoches * cfg.num_mini_batch
+        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
         value_loss_epoch /= num_updates
         action_loss_epoch /= num_updates
