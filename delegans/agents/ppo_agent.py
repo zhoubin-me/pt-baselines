@@ -7,6 +7,7 @@ from collections import namedtuple
 from delegans.agents.base_agent import BaseAgent
 from delegans.common.utils import make_vec_envs
 from delegans.common.model import ACNet
+from delegans.common.model_x import Policy
 from delegans.common.logger import EpochLogger
 from delegans.common.normalizer import SignNormalizer, ImageNormalizer
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
@@ -19,7 +20,8 @@ class PPOAgent(BaseAgent):
 
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
-        self.network = ACNet(4, self.envs.action_space.n).cuda()
+        # self.network = ACNet(4, self.envs.action_space.n).cuda()
+        self.network = Policy(self.envs.observation_space.shape, self.envs.action_space)
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
