@@ -24,11 +24,11 @@ class PPOAgent(BaseAgent):
         self.network = ACNet(4, self.envs.action_space.n).cuda()
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
-        if cfg.use_lr_decay:
-            num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: (num_updates - step) / num_updates)
-        else:
-            self.lr_scheduler = None
+        # if cfg.use_lr_decay:
+        #     num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
+        #     self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: (num_updates - step) / num_updates)
+        # else:
+        #     self.lr_scheduler = None
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
         self.reward_normalizer = SignNormalizer()
@@ -169,8 +169,8 @@ class PPOAgent(BaseAgent):
         self.rollouts.after_update()
         # self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         # self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
+        # if self.lr_scheduler is not None:
+        #     self.lr_scheduler.step()
 
         num_updates = cfg.epoches * cfg.num_mini_batch
         value_loss_epoch /= num_updates
