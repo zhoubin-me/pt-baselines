@@ -68,7 +68,7 @@ class A2CAgent(BaseAgent):
                         self.logger.store(TrainEpRet=info['episode']['r'])
 
             # Compute R and GAE
-            v_next, _, = self.network(self.rollouts.obs[-1])
+            v_next, _ = self.network(self.rollouts.obs[-1])
 
             if cfg.use_gae:
                 gae = 0
@@ -103,33 +103,30 @@ class A2CAgent(BaseAgent):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
         self.optimizer.step()
-        self.logger.store(Loss=loss.item())
 
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
-        return value_loss.item(), action_loss.item(), entropy.item(), loss.item()
+        self.logger.store(Loss=loss.item())
+        self.logger.store(VLoss=value_loss.item())
+        self.logger.store(PLoss=action_loss.item())
+        self.logger.store(Entropy=entropy.item())
+
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
 
 
     def run(self):
         cfg = self.cfg
         logger = self.logger
-        logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0)
+        logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0, Loss=0)
         t0 = time.time()
 
         states = self.envs.reset()
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
-            # Sample experiences
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
-
             self.step()
-            vloss, ploss, entropy, loss = self.update()
-            logger.store(VLoss=vloss)
-            logger.store(PLoss=ploss)
-            logger.store(Entropy=entropy)
-            logger.store(Loss=loss)
+            self.update()
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
@@ -139,8 +136,7 @@ class A2CAgent(BaseAgent):
                 logger.log_tabular('VLoss', average_only=True)
                 logger.log_tabular('PLoss', average_only=True)
                 logger.log_tabular('Entropy', average_only=True)
-                logger.log_tabular('RemHrs',
-                                   (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
+                logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 
