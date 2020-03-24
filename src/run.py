@@ -24,6 +24,7 @@ if __name__ == '__main__':
         args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
 
     if args.seed is not None:
+        args.seed = 1
         random_seed(args.seed)
 
     mkdir(args.log_dir)

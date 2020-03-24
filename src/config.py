@@ -2,7 +2,7 @@
 
 class RainbowConfig:
     game = 'Breakout'
-    seed = 0
+    seed = None
 
     dueling = True
     double = True
@@ -46,7 +46,7 @@ class RainbowConfig:
 
 class A3CConfig:
     game = 'Pong'
-    seed = 0
+    seed = None
 
     num_actors = 16
 
@@ -70,7 +70,7 @@ class A3CConfig:
 
 class A2CConfig:
     game = "Pong"
-    seed = 1234
+    seed = None
 
     num_processes = 16
     recurrent = True
@@ -99,7 +99,7 @@ class A2CConfig:
 
 class PPOConfig:
     game = "Pong"
-    seed = 1234
+    seed = None
 
     num_processes = 8
     recurrent = True
