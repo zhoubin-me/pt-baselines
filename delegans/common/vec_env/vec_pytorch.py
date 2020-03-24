@@ -2,7 +2,7 @@ import numpy as np
 import gym
 import torch
 
-from celegans.common.vec_env import VecEnvWrapper
+from delegans.common.vec_env import VecEnvWrapper
 
 
 class VecPyTorch(VecEnvWrapper):

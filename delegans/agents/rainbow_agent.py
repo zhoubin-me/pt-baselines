@@ -5,14 +5,14 @@ import torch.multiprocessing as mp
 import numpy as np
 from collections import deque
 
-from celegans.agents.async_actor import AsyncActor
-from celegans.common.async_replay import AsyncReplayBuffer
-from celegans.agents.base_agent import BaseAgent
-from celegans.common.utils import close_obj, tensor, make_deepq_env
-from celegans.common.schedule import LinearSchedule
-from celegans.common.normalizer import ImageNormalizer, SignNormalizer
-from celegans.common.logger import EpochLogger
-from celegans.common.model import C51Net
+from delegans.agents.async_actor import AsyncActor
+from delegans.common.async_replay import AsyncReplayBuffer
+from delegans.agents.base_agent import BaseAgent
+from delegans.common.utils import close_obj, tensor, make_deepq_env
+from delegans.common.schedule import LinearSchedule
+from delegans.common.normalizer import ImageNormalizer, SignNormalizer
+from delegans.common.logger import EpochLogger
+from delegans.common.model import C51Net
 
 class RainbowActor(AsyncActor):
     def __init__(self, cfg, lock):

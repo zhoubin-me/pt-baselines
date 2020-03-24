@@ -1,5 +1,5 @@
 from . import VecEnvWrapper
-from celegans.common.monitor import ResultsWriter
+from delegans.common.monitor import ResultsWriter
 import numpy as np
 import time
 from collections import deque

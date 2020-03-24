@@ -1,7 +1,7 @@
 import torch.multiprocessing as mp
 
-from celegans.common.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
-from celegans.common.utils import tensor
+from delegans.common.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
+from delegans.common.utils import tensor
 
 # Copied from ShangtongZhang/DeepRL
 # https://github.com/ShangtongZhang/DeepRL/blob/master/deep_rl/component/replay.py

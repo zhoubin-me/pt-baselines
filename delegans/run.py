@@ -1,8 +1,8 @@
 import numpy as np
 import argparse
-from celegans.common.utils import random_seed, mkdir, set_thread
-from celegans.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
-from celegans.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
+from delegans.common.utils import random_seed, mkdir, set_thread
+from delegans.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
+from delegans.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')

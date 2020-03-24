@@ -6,9 +6,9 @@ import gym
 from pathlib import Path
 
 from gym import wrappers
-from celegans.common.atari_wrapper import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit
-from celegans.common.monitor import Monitor
-from celegans.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack
+from delegans.common.atari_wrapper import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit
+from delegans.common.monitor import Monitor
+from delegans.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack
 
 
 def mkdir(path):

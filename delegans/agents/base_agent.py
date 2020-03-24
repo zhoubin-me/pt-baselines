@@ -2,7 +2,7 @@
 import torch
 import pickle
 import numpy as np
-from celegans.common.utils import close_obj
+from delegans.common.utils import close_obj
 
 # Copied from ShangtongZhang/DeepRL
 # https://github.com/ShangtongZhang/DeepRL/blob/master/deep_rl/agent/BaseAgent.py
