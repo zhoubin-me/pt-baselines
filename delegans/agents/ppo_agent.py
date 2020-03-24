@@ -21,7 +21,7 @@ class PPOAgent(BaseAgent):
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
         # self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.network = Policy(self.envs.observation_space.shape, self.envs.action_space)
+        self.network = Policy(self.envs.observation_space.shape, self.envs.action_space).cuda()
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
@@ -68,7 +68,7 @@ class PPOAgent(BaseAgent):
                         self.logger.store(TrainEpRet=info['episode']['r'])
 
             # Compute R and GAE
-            v_next, _ = self.network(self.rollouts.obs[-1])
+            v_next, _ = self.network.get_value(self.rollouts.obs[-1])
 
             if cfg.use_gae:
                 gae = 0

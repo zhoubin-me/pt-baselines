@@ -174,8 +174,8 @@ class Policy(nn.Module):
 
         return value, action, action_log_probs
 
-    def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+    def get_value(self, inputs):
+        value, *_ = self.base(inputs)
         return value
 
     def evaluate_actions(self, inputs, action):
