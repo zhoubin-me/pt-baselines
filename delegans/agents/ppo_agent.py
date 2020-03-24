@@ -187,11 +187,17 @@ class PPOAgent(BaseAgent):
         logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
 
+        def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
+            """Decreases the learning rate linearly"""
+            lr = initial_lr - (initial_lr * (epoch / float(total_num_epochs)))
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
+
         states = self.envs.reset()
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
             # Sample experiences
-
+            update_linear_schedule(self.optimizer, self.total_steps // (cfg.num_processes * cfg.nsteps), cfg.max_steps // (cfg.num_processes * cfg.nsteps), cfg.lr)
             self.step()
             vloss, ploss, entropy = self.update()
             logger.store(VLoss=vloss)
