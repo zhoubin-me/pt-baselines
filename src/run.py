@@ -8,9 +8,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
     parser.add_argument('algo', type=str, choices=['Rainbow', 'A2C', 'A3C', 'PPO'])
     args = parser.parse_known_args()
-
-
     cfg = eval(f'{args[0].algo}Config')
+
     for k, v in cfg.__dict__.items():
         if not k.startswith('_'):
             parser.add_argument(f'--{k}', type=type(v), default=v)
@@ -23,7 +22,7 @@ if __name__ == '__main__':
     if len(args.ckpt) > 0:
         args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
 
-    if args.seed is not None:
+    if args.seed == 0:
         args.seed = 1
         random_seed(args.seed)
 
