@@ -5,7 +5,8 @@ import time
 from collections import namedtuple
 
 from delegans.agents.base_agent import BaseAgent
-from delegans.common.utils import make_vec_envs
+# from delegans.common.utils import make_vec_envs
+from delegans.common.envs import make_vec_envs
 from delegans.common.model import ACNet
 from delegans.common.storage import RolloutStorage
 from delegans.common.logger import EpochLogger
@@ -18,8 +19,8 @@ class PPOAgent(BaseAgent):
     def __init__(self, cfg):
         super(PPOAgent, self).__init__(cfg)
 
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
-
+        # self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
+        self.envs = make_vec_envs(f'{cfg.game}NoFrameskip-v4', seed=cfg.seed, num_processes=cfg.num_processes, gamma=cfg.gamma, log_dir=cfg.log_dir, device=torch.device(0), allow_early_resets=False)
         self.network = ACNet(4, self.envs.action_space.n).cuda()
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
@@ -32,10 +33,9 @@ class PPOAgent(BaseAgent):
         self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
-
         # self.rollouts = Rollouts(
         #     obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-        #     actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+        #     actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).long().cuda(),
         #     action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
         #     values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
         #     rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
@@ -44,6 +44,7 @@ class PPOAgent(BaseAgent):
         # )
 
         self.rollouts = RolloutStorage(cfg.nsteps, cfg.num_processes, self.envs.observation_space.shape, self.envs.action_space, 512)
+        self.rollouts.to(torch.device(0))
 
         self.total_steps = 0
 
@@ -65,9 +66,11 @@ class PPOAgent(BaseAgent):
                 # self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
                 # self.rollouts.rewards[step].copy_(rewards)
                 # self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
+                masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in dones]).cuda()
+                bad_masks = torch.FloatTensor([[0.0] if 'bad_transition' in info.keys() else [1.0] for info in infos]).cuda()
 
                 self.rollouts.insert(self.state_normalizer(states), torch.zeros(cfg.num_processes, 512).cuda(), actions,
-                                action_log_probs, v, rewards, 1-dones, dones)
+                                action_log_probs, v, rewards, masks, bad_masks)
 
                 for info in infos:
                     if 'episode' in info:
