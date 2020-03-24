@@ -171,11 +171,11 @@ class PPOAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
             # Sample experiences
+            self.step()
+            vloss, ploss, entropy, loss = self.update()
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 
-            self.step()
-            vloss, ploss, entropy, loss = self.update()
             logger.store(VLoss=vloss)
             logger.store(PLoss=ploss)
             logger.store(Entropy=entropy)
