@@ -51,17 +51,15 @@ class PPOAgent(BaseAgent):
         cfg = self.cfg
         with torch.no_grad():
             for step in range(cfg.nsteps):
-                v, pi = self.network(self.rollouts.obs[step])
-                dist = Categorical(logits=pi)
-                actions = dist.sample()
-                action_log_probs = dist.log_prob(actions)
+                v, actions, action_log_probs = self.network.act(self.rollouts.obs[step])
+
                 states, rewards, dones, infos = self.envs.step(actions)
                 self.total_steps += cfg.num_processes
 
                 self.rollouts.masks[step + 1].copy_(1 - dones)
-                self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
+                self.rollouts.actions[step].copy_(actions)
                 self.rollouts.values[step].copy_(v)
-                self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
+                self.rollouts.action_log_probs[step].copy_(action_log_probs)
                 self.rollouts.rewards[step].copy_(rewards)
                 self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
@@ -126,9 +124,7 @@ class PPOAgent(BaseAgent):
                 obs_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ = sample
 
                 # Reshape to do in a single forward pass for all steps
-                values, pis = self.network(obs_batch)
-                dist = Categorical(logits=pis)
-                action_log_probs, dist_entropy = dist.log_prob(actions_batch.view(-1)), dist.entropy().mean()
+                values, action_log_probs, dist_entropy = self.network.evaluate_actions(obs_batch, actions_batch)
 
                 ratio = torch.exp(action_log_probs -
                                   old_action_log_probs_batch)
