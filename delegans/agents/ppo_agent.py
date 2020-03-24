@@ -69,8 +69,8 @@ class PPOAgent(BaseAgent):
                 masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in dones]).cuda()
                 bad_masks = torch.FloatTensor([[0.0] if 'bad_transition' in info.keys() else [1.0] for info in infos]).cuda()
 
-                self.rollouts.insert(self.state_normalizer(states), torch.zeros(cfg.num_processes, 512).cuda(), actions,
-                                action_log_probs, v, rewards, masks, bad_masks)
+                self.rollouts.insert(self.state_normalizer(states), torch.zeros(cfg.num_processes, 512).cuda(), actions.unsqueeze(-1),
+                                action_log_probs.unsqueeze(-1), v, rewards, masks, bad_masks)
 
                 for info in infos:
                     if 'episode' in info:
