@@ -18,7 +18,7 @@ class Config:
     eps = 1e-5
     alpha = 0.99
     epoches = 4
-    mini_batch_size = 4
+    num_mini_batch = 4
 
 
     gae_lambda = 0.95
