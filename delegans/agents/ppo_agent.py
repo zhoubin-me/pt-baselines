@@ -1,17 +1,8 @@
 import torch
 from torch.distributions import Categorical
-
-import time
-from collections import namedtuple
-
 from delegans.agents.a2c_agent import A2CAgent
-from delegans.common.utils import make_vec_envs
-from delegans.common.model import ACNet
-from delegans.common.logger import EpochLogger
-from delegans.common.normalizer import SignNormalizer, ImageNormalizer
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
 
 class PPOAgent(A2CAgent):
     def __init__(self, cfg):
