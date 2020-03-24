@@ -1,8 +1,8 @@
 import numpy as np
 import argparse
-from elegans.common.utils import random_seed, mkdir, set_thread
-from elegans.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
-from elegans.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
+from celegans.common.utils import random_seed, mkdir, set_thread
+from celegans.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
+from celegans.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     else:
         args.seed = 0
 
-    if args.algo == 'A3C':
+    if args.algo == 'A3C' or args.algo == 'Rainbow':
         set_thread(1)
 
     mkdir(args.log_dir)

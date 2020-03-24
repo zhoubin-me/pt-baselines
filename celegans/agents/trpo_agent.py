@@ -5,12 +5,12 @@ import time
 from collections import namedtuple
 
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-from elegans.agents.base_agent import BaseAgent
-from elegans.common.utils import make_vec_envs
-from elegans.common.model import ACNet
-from elegans.common.logger import EpochLogger
-from elegans.common.schedule import LinearSchedule
-from elegans.common.normalizer import SignNormalizer, ImageNormalizer
+from celegans.agents.base_agent import BaseAgent
+from celegans.common.utils import make_vec_envs
+from celegans.common.model import ACNet
+from celegans.common.logger import EpochLogger
+from celegans.common.schedule import LinearSchedule
+from celegans.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
 

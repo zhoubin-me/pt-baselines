@@ -1,6 +1,6 @@
 import os
 import torch
-from elegans.common.bench import _atari7
+from celegans.common.bench import _atari7
 
 
 print(_atari7)

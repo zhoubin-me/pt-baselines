@@ -1,5 +1,5 @@
 from . import VecEnvWrapper
-from elegans.common.monitor import ResultsWriter
+from celegans.common.monitor import ResultsWriter
 import numpy as np
 import time
 from collections import deque
