@@ -159,6 +159,8 @@ class PPOAgent(BaseAgent):
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
 
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
         rollouts.obs[0].copy_(rollouts.obs[-1])
         rollouts.masks[0].copy_(rollouts.masks[-1])
 
@@ -181,8 +183,6 @@ class PPOAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
             # Sample experiences
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
             self.step()
             vloss, ploss, entropy = self.update()
 
