@@ -24,11 +24,11 @@ class PPOAgent(BaseAgent):
         self.network = Policy(self.envs.observation_space.shape, self.envs.action_space).cuda()
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
-        # if cfg.use_lr_decay:
-        #     num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
-        #     self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: (num_updates - step) / num_updates)
-        # else:
-        #     self.lr_scheduler = None
+        if cfg.use_lr_decay:
+            num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda epoch: (num_updates - epoch) / num_updates)
+        else:
+            self.lr_scheduler = None
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
         self.reward_normalizer = SignNormalizer()
@@ -155,9 +155,10 @@ class PPOAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
         if cfg.use_lr_decay:
-            update_count = self.total_steps // (cfg.num_processes * cfg.nsteps)
-            update_total = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
-            update_linear_schedule(self.optimizer, update_count, update_total, cfg.lr)
+            self.lr_scheduler.step()
+            # update_count = self.total_steps // (cfg.num_processes * cfg.nsteps)
+            # update_total = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
+            # update_linear_schedule(self.optimizer, update_count, update_total, cfg.lr)
 
 
         num_updates = cfg.epoches * cfg.num_mini_batch
