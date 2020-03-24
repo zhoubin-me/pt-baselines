@@ -175,7 +175,6 @@ class A3CAgent(BaseAgent):
             actor.start()
             actor.set_network(self.network)
 
-
         logger = self.logger
         t0 = time.time()
 

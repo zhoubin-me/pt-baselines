@@ -18,7 +18,6 @@ Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'reward
 class PPOAgent(BaseAgent):
     def __init__(self, cfg):
         super(PPOAgent, self).__init__(cfg)
-        self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
@@ -46,27 +45,6 @@ class PPOAgent(BaseAgent):
         )
 
         self.total_steps = 0
-
-    def sampler(self):
-        cfg = self.cfg
-        rollouts = self.rollouts
-        batch_size = cfg.num_processes * cfg.nsteps
-        mini_batch_size = batch_size // cfg.num_mini_batch
-
-        adv = self.rollouts.returns[:-1] - self.rollouts.values[:-1]
-        adv = (adv - adv.mean()) / (adv.std() + 1e-5)
-        sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=True)
-
-        for indices in sampler:
-            obs_batch = rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape)[indices]
-            action_batch = rollouts.actions.view(-1, 1)[indices]
-            action_log_prob_batch = rollouts.action_log_probs.view(-1, 1)[indices]
-            value_batch = rollouts.values[:-1].view(-1, 1)[indices]
-            mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]
-            return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
-            adv_batch = adv.view(-1, 1)[indices]
-            yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, adv_batch
-
 
 
     def step(self):
@@ -101,52 +79,86 @@ class PPOAgent(BaseAgent):
                 gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
                 self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
 
+
+    def sampler(self, advs):
+        cfg = self.cfg
+        rollouts = self.rollouts
+        batch_size = cfg.num_processes * cfg.nsteps
+        mini_batch_size = batch_size // cfg.num_mini_batch
+        sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=True)
+
+        for indices in sampler:
+            obs_batch = rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape)[indices]
+            action_batch = rollouts.actions.view(-1, 1)[indices]
+            action_log_prob_batch = rollouts.action_log_probs.view(-1, 1)[indices]
+            value_batch = rollouts.values[:-1].view(-1, 1)[indices]
+            mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]
+            return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
+            adv_batch = advs.view(-1, 1)[indices]
+            yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, adv_batch
+
+
+
     def update(self):
         cfg = self.cfg
+        rollouts = self.rollouts
 
-        vloss, ploss, entropies, losses, counter = 0, 0, 0, 0, 0
-        for epoch in range(cfg.epoches):
-            sampler = self.sampler()
-            for batch_data in sampler:
-                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, adv_batch = batch_data
+        advantages = rollouts.returns[:-1] - rollouts.values[:-1]
+        advantages = (advantages - advantages.mean()) / (
+            advantages.std() + 1e-5)
 
-                vs, pis = self.network(obs_batch)
+        value_loss_epoch = 0
+        action_loss_epoch = 0
+        dist_entropy_epoch = 0
+        loss_epoch = 0
+        for e in range(cfg.epoches):
+            data_generator = self.sampler(advantages)
+            for sample in data_generator:
+                obs_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch,  adv_targ = sample
+
+                # Reshape to do in a single forward pass for all steps
+
+                values, pis = self.network(obs_batch)
                 dist = Categorical(logits=pis)
-                log_probs = dist.log_prob(action_batch.view(-1))
-                entropy = dist.entropy().mean()
+                action_log_probs = dist.log_prob(actions_batch.view(-1))
+                dist_entropy = dist.entropy().mean()
 
-                ratio = torch.exp(log_probs - action_log_prob_batch)
-                surr1 = ratio * adv_batch
-                surr2 = torch.clamp(ratio, 1.0 - cfg.clip_param, 1.0 + cfg.clip_param) * adv_batch
-                policy_loss = torch.min(surr1, surr2).mean().neg()
+                ratio = torch.exp(action_log_probs -
+                                  old_action_log_probs_batch)
+                surr1 = ratio * adv_targ
+                surr2 = torch.clamp(ratio, 1.0 - cfg.clip_param,
+                                    1.0 + cfg.clip_param) * adv_targ
+                action_loss = -torch.min(surr1, surr2).mean()
 
-                value_loss = (vs - return_batch).pow(2)
+                value_pred_clipped = value_preds_batch + \
+                    (values - value_preds_batch).clamp(-cfg.clip_param, cfg.clip_param)
+                value_losses = (values - return_batch).pow(2)
+                value_losses_clipped = (
+                    value_pred_clipped - return_batch).pow(2)
+                value_loss = 0.5 * torch.max(value_losses,
+                                             value_losses_clipped).mean()
 
-                vs_clipped = value_batch + (vs - value_batch).clamp(-cfg.clip_param, cfg.clip_param)
-                vs_loss_clipped = (vs_clipped - return_batch).pow(2)
 
-                value_loss = 0.5 * torch.max(value_loss, vs_loss_clipped).mean()
-
-
-                loss = value_loss * cfg.value_loss_coef + policy_loss - entropy * cfg.entropy_coef
-
+                loss = value_loss * cfg.value_loss_coef + action_loss - dist_entropy * cfg.entropy_coef
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(),
+                                         cfg.max_grad_norm)
                 self.optimizer.step()
 
-                vloss += value_loss.item()
-                ploss += policy_loss.item()
-                entropies += entropy.item()
-                losses += loss.item()
-                counter += 1
+                value_loss_epoch += value_loss.item()
+                action_loss_epoch += action_loss.item()
+                dist_entropy_epoch += dist_entropy.item()
+                loss_epoch += loss.item()
 
-        vloss /= counter
-        ploss /= counter
-        entropies /= counter
-        losses /= counter
+        num_updates = cfg.epoches * cfg.num_mini_batch
 
-        return vloss, ploss, entropies, losses
+        value_loss_epoch /= num_updates
+        action_loss_epoch /= num_updates
+        dist_entropy_epoch /= num_updates
+        loss /= num_updates
+
+        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, loss
 
 
     def run(self):

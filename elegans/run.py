@@ -1,6 +1,6 @@
 import numpy as np
 import argparse
-from elegans.common.utils import random_seed, mkdir
+from elegans.common.utils import random_seed, mkdir, set_thread
 from elegans.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
 from elegans.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
 
@@ -16,16 +16,19 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if len(args.log_dir) == 0:
-        args.log_dir = f'log/a2c-{args.game}-{args.seed}/'
-        args.ckpt_dir = f'ckpt/a2c-{args.game}-{args.seed}/'
+        args.log_dir = f'log/{args.algo}-{args.game}-{args.seed}/'
+        args.ckpt_dir = f'ckpt/{args.algo}-{args.game}-{args.seed}/'
 
     if len(args.ckpt) > 0:
-        args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
+        args.log_dir = f'log/{args.algo}-{args.game}-{args.seed}-eval/'
 
     if args.seed > 0:
         random_seed(args.seed)
     else:
         args.seed = 0
+
+    if args.algo == 'A3C':
+        set_thread(1)
 
     mkdir(args.log_dir)
     agent = eval(f'{args.algo}Agent(cfg=args)')
