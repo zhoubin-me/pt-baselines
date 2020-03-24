@@ -12,12 +12,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
     parser.add_argument('algo', type=str, choices=['Rainbow', 'A2C', 'A3C', 'PPO'])
     args = parser.parse_known_args()
+
+
     cfg = eval(f'{args[0].algo}Config')
     for k, v in cfg.__dict__.items():
         if not k.startswith('_'):
             parser.add_argument(f'--{k}', type=type(v), default=v)
     args = parser.parse_args()
-    print(args)
 
     if len(args.log_dir) == 0:
         args.log_dir = f'log/a2c-{args.game}-{args.seed}/'
@@ -31,7 +32,7 @@ if __name__ == '__main__':
 
     mkdir(args.log_dir)
     agent = eval(f'{args.algo}Agent(cfg=args)')
-    agent.logger.save_config(args)
+    agent.logger.save_config(vars(args))
 
     if not args.play:
         mkdir(args.ckpt_dir)
