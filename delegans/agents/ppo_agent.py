@@ -7,6 +7,7 @@ from collections import namedtuple
 from delegans.agents.base_agent import BaseAgent
 from delegans.common.utils import make_vec_envs
 from delegans.common.model import ACNet
+from delegans.common.storage import RolloutStorage
 from delegans.common.logger import EpochLogger
 from delegans.common.normalizer import SignNormalizer, ImageNormalizer
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
@@ -32,15 +33,17 @@ class PPOAgent(BaseAgent):
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
 
-        self.rollouts = Rollouts(
-            obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
-        )
+        # self.rollouts = Rollouts(
+        #     obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
+        #     actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+        #     action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+        #     values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
+        #     rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+        #     masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
+        #     returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
+        # )
+
+        self.rollouts = RolloutStorage(cfg.nsteps, cfg.num_processes, self.envs.observation_space.shape, self.envs.action_space, 512)
 
         self.total_steps = 0
 
@@ -56,12 +59,15 @@ class PPOAgent(BaseAgent):
                 states, rewards, dones, infos = self.envs.step(actions)
                 self.total_steps += cfg.num_processes
 
-                self.rollouts.masks[step + 1].copy_(1 - dones)
-                self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
-                self.rollouts.values[step].copy_(v)
-                self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
-                self.rollouts.rewards[step].copy_(rewards)
-                self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
+                # self.rollouts.masks[step + 1].copy_(1 - dones)
+                # self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
+                # self.rollouts.values[step].copy_(v)
+                # self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
+                # self.rollouts.rewards[step].copy_(rewards)
+                # self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
+
+                self.rollouts.insert(self.state_normalizer(states), torch.zeros(cfg.num_processes, 512).cuda(), actions,
+                                action_log_probs, v, rewards, 1-dones, dones)
 
                 for info in infos:
                     if 'episode' in info:
@@ -70,18 +76,21 @@ class PPOAgent(BaseAgent):
             # Compute R and GAE
             v_next, _ = self.network(self.rollouts.obs[-1])
 
-            if cfg.use_gae:
-                gae = 0
-                self.rollouts.values[-1] = v_next
-                for step in reversed(range(cfg.nsteps)):
-                    delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
-                        step + 1] - self.rollouts.values[step]
-                    gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
-                    self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
-            else:
-                self.rollouts.returns[-1] = v_next
-                for step in reversed(range(self.rollouts.rewards.size(0))):
-                    self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step+1] + self.rollouts.rewards[step]
+            self.rollouts.compute_returns(v_next, cfg.use_gae, cfg.gamma, cfg.gae_lambda, False)
+
+            #
+            # if cfg.use_gae:
+            #     gae = 0
+            #     self.rollouts.values[-1] = v_next
+            #     for step in reversed(range(cfg.nsteps)):
+            #         delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
+            #             step + 1] - self.rollouts.values[step]
+            #         gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
+            #         self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+            # else:
+            #     self.rollouts.returns[-1] = v_next
+            #     for step in reversed(range(self.rollouts.rewards.size(0))):
+            #         self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step+1] + self.rollouts.rewards[step]
 
     def data_generator(self, advantages):
         cfg = self.cfg
@@ -110,7 +119,7 @@ class PPOAgent(BaseAgent):
     def update(self):
         cfg = self.cfg
 
-        advantages = self.rollouts.returns[:-1] - self.rollouts.values[:-1]
+        advantages = self.rollouts.returns[:-1] - self.rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
         value_loss_epoch = 0
@@ -118,10 +127,10 @@ class PPOAgent(BaseAgent):
         dist_entropy_epoch = 0
 
         for e in range(cfg.epoches):
-            data_generator = self.data_generator(advantages)
+            data_generator = self.rollouts.feed_forward_generator(advantages, cfg.num_mini_batch)
 
             for sample in data_generator:
-                obs_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ = sample
+                obs_batch, recurrent_hidden_states_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ = sample
 
                 # Reshape to do in a single forward pass for all steps
                 values, pis = self.network(obs_batch)
@@ -154,8 +163,9 @@ class PPOAgent(BaseAgent):
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
 
-        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
-        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
+        self.rollouts.after_update()
+        # self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+        # self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
 
