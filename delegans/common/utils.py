@@ -37,6 +37,7 @@ def random_seed(seed=None):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(np.random.randint(int(1e6)))
+    torch.cuda.manual_seed_all(seed)
 
 
 def make_deepq_env(game,

@@ -8,7 +8,6 @@ from delegans.agents.base_agent import BaseAgent
 from delegans.common.utils import make_vec_envs
 from delegans.common.model import ACNet
 from delegans.common.logger import EpochLogger
-from delegans.common.schedule import LinearSchedule
 from delegans.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
@@ -23,8 +22,8 @@ class A2CAgent(BaseAgent):
         self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
 
         if cfg.use_lr_decay:
-            scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
+            num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: (num_updates - step) / num_updates)
         else:
             self.lr_scheduler = None
 

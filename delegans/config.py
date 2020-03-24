@@ -99,7 +99,7 @@ class A2CConfig:
 
 class PPOConfig:
     game = "Pong"
-    seed = 0
+    seed = 1
 
     num_processes = 8
     recurrent = True

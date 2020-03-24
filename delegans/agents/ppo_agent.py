@@ -4,16 +4,14 @@ from torch.distributions import Categorical
 import time
 from collections import namedtuple
 
-from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 from delegans.agents.base_agent import BaseAgent
 from delegans.common.utils import make_vec_envs
 from delegans.common.model import ACNet
 from delegans.common.logger import EpochLogger
-from delegans.common.schedule import LinearSchedule
 from delegans.common.normalizer import SignNormalizer, ImageNormalizer
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
-
 
 class PPOAgent(BaseAgent):
     def __init__(self, cfg):
@@ -25,8 +23,8 @@ class PPOAgent(BaseAgent):
         self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
-            num_updates = cfg.max_steps // (cfg.nsteps * cfg.num_processes)
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lambda epoch: (1 - epoch / num_updates))
+            num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: (num_updates - step) / num_updates)
         else:
             self.lr_scheduler = None
 
@@ -79,58 +77,52 @@ class PPOAgent(BaseAgent):
                 gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
                 self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
 
-
-    def feed_forward_generator(self, advantages):
-
+    def data_generator(self, advantages):
         rollouts = self.rollouts
         cfg = self.cfg
-        batch_size = cfg.num_processes * cfg.nsteps
+
+        num_steps, num_processes = rollouts.rewards.size()[0:2]
+        batch_size = num_processes * num_steps
         mini_batch_size = batch_size // cfg.num_mini_batch
 
         sampler = BatchSampler(
             SubsetRandomSampler(range(batch_size)),
             mini_batch_size,
             drop_last=True)
+
         for indices in sampler:
             obs_batch = rollouts.obs[:-1].view(-1, *rollouts.obs.size()[2:])[indices]
             actions_batch = rollouts.actions.view(-1, rollouts.actions.size(-1))[indices]
+
             value_preds_batch = rollouts.values[:-1].view(-1, 1)[indices]
             return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
             masks_batch = rollouts.masks[:-1].view(-1, 1)[indices]
             old_action_log_probs_batch = rollouts.action_log_probs.view(-1, 1)[indices]
-
             adv_targ = advantages.view(-1, 1)[indices]
 
-            yield obs_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
-
+            yield obs_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
 
     def update(self):
-        cfg = self.cfg
         rollouts = self.rollouts
+        cfg = self.cfg
 
         advantages = rollouts.returns[:-1] - rollouts.values[:-1]
-        advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
         dist_entropy_epoch = 0
 
         for e in range(cfg.epoches):
-
-            data_generator = self.feed_forward_generator(advantages)
+            data_generator = self.data_generator(advantages)
 
             for sample in data_generator:
-                obs_batch, actions_batch, \
-                   value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, \
-                        adv_targ = sample
+                obs_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ = sample
 
                 # Reshape to do in a single forward pass for all steps
                 values, pis = self.network(obs_batch)
                 dist = Categorical(logits=pis)
-                action_log_probs = dist.log_prob(actions_batch)
-                dist_entropy = dist.entropy().mean()
+                action_log_probs, dist_entropy = dist.log_prob(actions_batch.view(-1)), dist.entropy().mean()
 
                 ratio = torch.exp(action_log_probs -
                                   old_action_log_probs_batch)
@@ -151,21 +143,19 @@ class PPOAgent(BaseAgent):
                 self.optimizer.zero_grad()
                 (value_loss * cfg.value_loss_coef + action_loss -
                  dist_entropy * cfg.entropy_coef).backward()
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(),
-                                         cfg.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
 
+        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
-        rollouts.obs[0].copy_(rollouts.obs[-1])
-        rollouts.masks[0].copy_(rollouts.masks[-1])
 
         num_updates = cfg.epoches * cfg.num_mini_batch
-
         value_loss_epoch /= num_updates
         action_loss_epoch /= num_updates
         dist_entropy_epoch /= num_updates
@@ -183,9 +173,9 @@ class PPOAgent(BaseAgent):
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
             # Sample experiences
+
             self.step()
             vloss, ploss, entropy = self.update()
-
             logger.store(VLoss=vloss)
             logger.store(PLoss=ploss)
             logger.store(Entropy=entropy)
@@ -194,7 +184,7 @@ class PPOAgent(BaseAgent):
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
                 logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
                 logger.log_tabular('TrainEpRet', with_min_and_max=True)
-                logger.log_tabular('LR', self.lr_scheduler.get_lr()[0])
+                # logger.log_tabular('Loss', average_only=True)
                 logger.log_tabular('VLoss', average_only=True)
                 logger.log_tabular('PLoss', average_only=True)
                 logger.log_tabular('Entropy', average_only=True)
@@ -202,4 +192,5 @@ class PPOAgent(BaseAgent):
                                    (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
+
 
