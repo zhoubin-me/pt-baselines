@@ -113,9 +113,6 @@ class PPOAgent(BaseAgent):
         advantages = self.rollouts.returns[:-1] - self.rollouts.values[:-1]
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
-        value_loss_epoch = 0
-        action_loss_epoch = 0
-        dist_entropy_epoch = 0
 
         for e in range(cfg.epoches):
             data_generator = self.data_generator(advantages)
@@ -141,16 +138,19 @@ class PPOAgent(BaseAgent):
                 value_loss = 0.5 * torch.max(value_losses,
                                              value_losses_clipped).mean()
 
+                loss = value_loss * cfg.value_loss_coef + action_loss - dist_entropy * cfg.entropy_coef
 
                 self.optimizer.zero_grad()
-                (value_loss * cfg.value_loss_coef + action_loss -
-                 dist_entropy * cfg.entropy_coef).backward()
+                loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
 
-                value_loss_epoch += value_loss.item()
-                action_loss_epoch += action_loss.item()
-                dist_entropy_epoch += dist_entropy.item()
+
+                self.logger.store(Loss=loss.item())
+                self.logger.store(VLoss=value_loss.item())
+                self.logger.store(PLoss=action_loss.item())
+                self.logger.store(Entropy=dist_entropy.item())
+
 
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
@@ -161,12 +161,6 @@ class PPOAgent(BaseAgent):
             # update_linear_schedule(self.optimizer, update_count, update_total, cfg.lr)
 
 
-        num_updates = cfg.epoches * cfg.num_mini_batch
-        value_loss_epoch /= num_updates
-        action_loss_epoch /= num_updates
-        dist_entropy_epoch /= num_updates
-
-        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch
 
 
     def run(self):
@@ -182,16 +176,15 @@ class PPOAgent(BaseAgent):
             # Sample experiences
 
             self.step()
-            vloss, ploss, entropy = self.update()
-            logger.store(VLoss=vloss)
-            logger.store(PLoss=ploss)
-            logger.store(Entropy=entropy)
+            self.update()
+
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
                 logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
                 logger.log_tabular('TrainEpRet', with_min_and_max=True)
-                # logger.log_tabular('Loss', average_only=True)
+                logger.log_tabular('LR', self.lr_scheduler.get_lr()[0])
+                logger.log_tabular('Loss', average_only=True)
                 logger.log_tabular('VLoss', average_only=True)
                 logger.log_tabular('PLoss', average_only=True)
                 logger.log_tabular('Entropy', average_only=True)
