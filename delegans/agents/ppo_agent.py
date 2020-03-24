@@ -202,7 +202,7 @@ class PPOAgent(BaseAgent):
                 param_group['lr'] = lr
 
         states = self.envs.reset()
-        self.rollouts.obs[0].copy_(self.state_normalizer(states))
+        self.rollouts.obs[0].copy_(states)
         while self.total_steps < cfg.max_steps:
             # Sample experiences
             update_linear_schedule(self.optimizer, self.total_steps // (cfg.num_processes * cfg.nsteps), cfg.max_steps // (cfg.num_processes * cfg.nsteps), cfg.lr)
