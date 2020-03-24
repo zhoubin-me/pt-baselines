@@ -154,7 +154,7 @@ class PPOAgent(BaseAgent):
 
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
-        if cfg.use_lr_decay:
+        if self.lr_scheduler is not None:
             self.lr_scheduler.step()
             # update_count = self.total_steps // (cfg.num_processes * cfg.nsteps)
             # update_total = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
