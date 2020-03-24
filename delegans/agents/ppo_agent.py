@@ -68,7 +68,7 @@ class PPOAgent(BaseAgent):
                         self.logger.store(TrainEpRet=info['episode']['r'])
 
             # Compute R and GAE
-            v_next, _ = self.network.get_value(self.rollouts.obs[-1])
+            v_next = self.network.get_value(self.rollouts.obs[-1])
 
             if cfg.use_gae:
                 gae = 0
