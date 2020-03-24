@@ -70,6 +70,7 @@ class RainbowAgent(BaseAgent):
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/test',
             record_video=True,
+            episode_life=False,
             max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
         )()
