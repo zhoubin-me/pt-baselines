@@ -73,7 +73,7 @@ class A2CConfig:
     seed = 0
 
     num_processes = 16
-    recurrent = True
+    use_gae = False
 
     nsteps = 5
     gamma = 0.99
@@ -102,7 +102,7 @@ class PPOConfig:
     seed = 1
 
     num_processes = 8
-    recurrent = True
+    use_gae = True
 
     nsteps = 128
     gamma = 0.99

@@ -69,19 +69,24 @@ class PPOAgent(BaseAgent):
 
             # Compute R and GAE
             v_next, _, = self.network(self.rollouts.obs[-1])
-            self.rollouts.values[-1].copy_(v_next)
-            gae = 0
-            for step in reversed(range(cfg.nsteps)):
-                delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
-                    step + 1] - self.rollouts.values[step]
-                gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
-                self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+
+            if cfg.use_gae:
+                gae = 0
+                self.rollouts.values[-1] = v_next
+                for step in reversed(range(cfg.nsteps)):
+                    delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
+                        step + 1] - self.rollouts.values[step]
+                    gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
+                    self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+            else:
+                self.rollouts.returns[-1] = v_next
+                for step in reversed(range(self.rollouts.rewards.size(0))):
+                    self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step+1] + self.rollouts.rewards[step]
 
     def data_generator(self, advantages):
-        rollouts = self.rollouts
         cfg = self.cfg
 
-        num_steps, num_processes = rollouts.rewards.size()[0:2]
+        num_steps, num_processes = self.rollouts.rewards.size()[0:2]
         batch_size = num_processes * num_steps
         mini_batch_size = batch_size // cfg.num_mini_batch
 
@@ -91,22 +96,21 @@ class PPOAgent(BaseAgent):
             drop_last=True)
 
         for indices in sampler:
-            obs_batch = rollouts.obs[:-1].view(-1, *rollouts.obs.size()[2:])[indices]
-            actions_batch = rollouts.actions.view(-1, rollouts.actions.size(-1))[indices]
+            obs_batch = self.rollouts.obs[:-1].view(-1, *self.rollouts.obs.size()[2:])[indices]
+            actions_batch = self.rollouts.actions.view(-1, self.rollouts.actions.size(-1))[indices]
 
-            value_preds_batch = rollouts.values[:-1].view(-1, 1)[indices]
-            return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
-            masks_batch = rollouts.masks[:-1].view(-1, 1)[indices]
-            old_action_log_probs_batch = rollouts.action_log_probs.view(-1, 1)[indices]
+            value_preds_batch = self.rollouts.values[:-1].view(-1, 1)[indices]
+            return_batch = self.rollouts.returns[:-1].view(-1, 1)[indices]
+            masks_batch = self.rollouts.masks[:-1].view(-1, 1)[indices]
+            old_action_log_probs_batch = self.rollouts.action_log_probs.view(-1, 1)[indices]
             adv_targ = advantages.view(-1, 1)[indices]
 
             yield obs_batch, actions_batch, value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
 
     def update(self):
-        rollouts = self.rollouts
         cfg = self.cfg
 
-        advantages = rollouts.returns[:-1] - rollouts.values[:-1]
+        advantages = self.rollouts.returns[:-1] - self.rollouts.values[:-1]
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
         value_loss_epoch = 0
@@ -166,6 +170,7 @@ class PPOAgent(BaseAgent):
     def run(self):
         cfg = self.cfg
         logger = self.logger
+
         logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
 

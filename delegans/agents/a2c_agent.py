@@ -69,13 +69,19 @@ class A2CAgent(BaseAgent):
 
             # Compute R and GAE
             v_next, _, = self.network(self.rollouts.obs[-1])
-            self.rollouts.values[-1].copy_(v_next)
-            gae = 0
-            for step in reversed(range(cfg.nsteps)):
-                delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
-                    step + 1] - self.rollouts.values[step]
-                gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
-                self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+
+            if cfg.use_gae:
+                gae = 0
+                self.rollouts.values[-1] = v_next
+                for step in reversed(range(cfg.nsteps)):
+                    delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
+                        step + 1] - self.rollouts.values[step]
+                    gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
+                    self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+            else:
+                self.rollouts.returns[-1] = v_next
+                for step in reversed(range(self.rollouts.rewards.size(0))):
+                    self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step+1] + self.rollouts.rewards[step]
 
     def update(self):
         cfg = self.cfg
