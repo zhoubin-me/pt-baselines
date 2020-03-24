@@ -24,7 +24,7 @@ class PPOAgent(BaseAgent):
 
         if cfg.use_lr_decay:
             num_updates = cfg.max_steps // (cfg.num_processes * cfg.nsteps)
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: (num_updates - step) / num_updates)
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda epoch: (num_updates - epoch) / num_updates)
         else:
             self.lr_scheduler = None
 
@@ -126,7 +126,7 @@ class PPOAgent(BaseAgent):
                 # Reshape to do in a single forward pass for all steps
                 values, pis = self.network(obs_batch)
                 dist = Categorical(logits=pis)
-                action_log_probs, dist_entropy = dist.log_prob(actions_batch.view(-1)), dist.entropy().mean()
+                action_log_probs, dist_entropy = dist.log_prob(actions_batch.view(-1)).unsqueeze(-1), dist.entropy().mean()
 
                 ratio = torch.exp(action_log_probs -
                                   old_action_log_probs_batch)
@@ -144,11 +144,16 @@ class PPOAgent(BaseAgent):
                                              value_losses_clipped).mean()
 
 
+                loss = value_loss * cfg.value_loss_coef + action_loss - dist_entropy * cfg.entropy_coef
                 self.optimizer.zero_grad()
-                (value_loss * cfg.value_loss_coef + action_loss -
-                 dist_entropy * cfg.entropy_coef).backward()
+                loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
+
+                self.logger.store(VLoss=value_loss.item())
+                self.logger.store(PLoss=action_loss.item())
+                self.logger.store(Entropy=dist_entropy.item())
+                self.logger.store(Loss=loss.item())
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
@@ -159,12 +164,6 @@ class PPOAgent(BaseAgent):
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
 
-        num_updates = cfg.epoches * cfg.num_mini_batch
-        value_loss_epoch /= num_updates
-        action_loss_epoch /= num_updates
-        dist_entropy_epoch /= num_updates
-
-        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch
 
 
     def run(self):
@@ -180,10 +179,8 @@ class PPOAgent(BaseAgent):
             # Sample experiences
 
             self.step()
-            vloss, ploss, entropy = self.update()
-            logger.store(VLoss=vloss)
-            logger.store(PLoss=ploss)
-            logger.store(Entropy=entropy)
+            self.update()
+
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
