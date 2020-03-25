@@ -73,8 +73,9 @@ class A2CConfig:
     seed = 0
 
     num_processes = 16
-    recurrent = True
+    use_gae = False
 
+    optimizer = 'rmsprop'
     nsteps = 5
     gamma = 0.99
     lr = 7e-4
@@ -102,8 +103,9 @@ class PPOConfig:
     seed = 0
 
     num_processes = 8
-    recurrent = True
+    use_gae = True
 
+    optimizer = 'adam'
     nsteps = 128
     gamma = 0.99
     lr = 2.5e-4

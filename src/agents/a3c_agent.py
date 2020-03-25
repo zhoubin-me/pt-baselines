@@ -138,7 +138,7 @@ class A3CAgent(BaseAgent):
             max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
         )()
-        self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
+        self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
 
         self.network = ACNet(self.test_env.observation_space.shape[0], self.test_env.action_space.n)
 

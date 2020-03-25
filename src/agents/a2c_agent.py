@@ -8,7 +8,6 @@ from src.agents.base_agent import BaseAgent
 from src.common.utils import make_vec_envs
 from src.common.model import ACNet
 from src.common.logger import EpochLogger
-from src.common.schedule import LinearSchedule
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
@@ -20,15 +19,19 @@ class A2CAgent(BaseAgent):
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
+
+        if cfg.optimizer == 'rmpsprop':
+            self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
+        elif cfg.optimizer == 'adam':
+            self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
 
         if cfg.use_lr_decay:
-            scheduler = LinearSchedule(1, 0, cfg.max_steps // (cfg.num_processes * cfg.nsteps))
+            scheduler = lambda step : 1 - step / (cfg.max_steps / cfg.num_processes * cfg.nsteps)
             self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
         else:
             self.lr_scheduler = None
 
-        self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
+        self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.reward_normalizer = SignNormalizer()
         self.state_normalizer = ImageNormalizer()
 
@@ -42,9 +45,8 @@ class A2CAgent(BaseAgent):
             returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
         )
 
-
-
         self.total_steps = 0
+
 
     def step(self):
         cfg = self.cfg
@@ -70,41 +72,52 @@ class A2CAgent(BaseAgent):
 
             # Compute R and GAE
             v_next, _, = self.network(self.rollouts.obs[-1])
-            self.rollouts.values[-1].copy_(v_next)
-            gae = 0
-            for step in reversed(range(cfg.nsteps)):
-                delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[
-                    step + 1] - self.rollouts.values[step]
-                gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
-                self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+
+            if cfg.use_gae:
+                self.rollouts.values[-1].copy_(v_next)
+                gae = 0
+                for step in reversed(range(cfg.nsteps)):
+                    delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[step + 1] - self.rollouts.values[step]
+                    gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
+                    self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+
+            else:
+                self.rollouts.returns[-1].copy_(v_next)
+                for step in reversed(range(cfg.nsteps)):
+                    self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step + 1] + self.rollouts.rewards[step]
+
 
     def update(self):
         cfg = self.cfg
 
         vs, pis = self.network(self.rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape))
-        vs = vs.view(cfg.nsteps, cfg.num_processes, 1)
         dist = Categorical(logits=pis)
-        log_probs = dist.log_prob(self.rollouts.actions.view(-1))
-        log_probs = log_probs.view(cfg.nsteps, cfg.num_processes, 1)
+        log_probs = dist.log_prob(self.rollouts.actions.view(-1)).unsqueeze(-1)
 
-        advs = self.rollouts.returns[:-1] - vs
+        advs = self.rollouts.returns[:-1].view(-1, 1) - vs
         value_loss = advs.pow(2).mean()
-        action_loss = (advs.detach() * log_probs).mean().neg()
+        policy_loss = (advs.detach() * log_probs).mean().neg()
         entropy = dist.entropy().mean()
 
-        loss = value_loss * cfg.value_loss_coef + action_loss - cfg.entropy_coef * entropy
+        loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
         self.optimizer.step()
+
         self.logger.store(Loss=loss.item())
+        self.logger.store(VLoss=value_loss.item())
+        self.logger.store(PLoss=policy_loss.item())
+        self.logger.store(Entropy=entropy)
+        self.logger.store(Loss=loss)
+
 
         self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
         self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
-        return value_loss.item(), action_loss.item(), entropy.item(), loss.item()
-
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
 
     def run(self):
         cfg = self.cfg
@@ -115,16 +128,10 @@ class A2CAgent(BaseAgent):
         states = self.envs.reset()
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
-            # Sample experiences
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
 
             self.step()
-            vloss, ploss, entropy, loss = self.update()
-            logger.store(VLoss=vloss)
-            logger.store(PLoss=ploss)
-            logger.store(Entropy=entropy)
-            logger.store(Loss=loss)
+            self.update()
+
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
@@ -134,8 +141,7 @@ class A2CAgent(BaseAgent):
                 logger.log_tabular('VLoss', average_only=True)
                 logger.log_tabular('PLoss', average_only=True)
                 logger.log_tabular('Entropy', average_only=True)
-                logger.log_tabular('RemHrs',
-                                   (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
+                logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 

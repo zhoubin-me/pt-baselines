@@ -16,17 +16,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if len(args.log_dir) == 0:
-        args.log_dir = f'log/a2c-{args.game}-{args.seed}/'
-        args.ckpt_dir = f'ckpt/a2c-{args.game}-{args.seed}/'
+        args.log_dir = f'log/{args.algo}-{args.game}-{args.seed}/'
+        args.ckpt_dir = f'ckpt/{args.algo}-{args.game}-{args.seed}/'
 
     if len(args.ckpt) > 0:
-        args.log_dir = f'log/a2c-{args.game}-{args.seed}-eval/'
+        args.log_dir = f'log/{args.algo}-{args.game}-{args.seed}-eval/'
 
     if args.seed <= 0:
-        args.seed = 1
-        random_seed(args.seed)
+        args.seed = 0
     else:
-
+        random_seed(args.seed)
 
 
     mkdir(args.log_dir)

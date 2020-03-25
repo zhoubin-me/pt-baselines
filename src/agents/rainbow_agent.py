@@ -71,10 +71,11 @@ class RainbowAgent(BaseAgent):
             log_prefix=f'{cfg.log_dir}/test',
             record_video=True,
             max_episode_steps=cfg.max_episode_steps,
+            episode_life=False,
             seed=cfg.seed
         )()
 
-        self.logger = EpochLogger(cfg.log_dir, exp_name=self.__class__.__name__)
+        self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.replay = AsyncReplayBuffer(
             buffer_size=cfg.replay_size,
             batch_size=cfg.batch_size,
