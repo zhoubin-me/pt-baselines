@@ -1,6 +1,6 @@
 import numpy as np
 import argparse
-from src.common.utils import random_seed, mkdir
+from src.common.utils import random_seed, mkdir, set_thread
 from src.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
 from src.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
 
@@ -26,6 +26,9 @@ if __name__ == '__main__':
         args.seed = 0
     else:
         random_seed(args.seed)
+
+    if args.algo == 'A3C':
+        set_thread(1)
 
 
     mkdir(args.log_dir)
