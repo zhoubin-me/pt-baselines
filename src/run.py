@@ -30,7 +30,6 @@ if __name__ == '__main__':
     if args.algo == 'A3C' or args.algo == 'Rainbow':
         set_thread(1)
 
-
     mkdir(args.log_dir)
     agent = eval(f'{args.algo}Agent(cfg=args)')
     agent.logger.save_config(vars(args))

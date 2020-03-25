@@ -39,6 +39,7 @@ def random_seed(seed=None):
     torch.manual_seed(np.random.randint(int(1e6)))
 
 
+
 def make_deepq_env(game,
                    log_prefix,
                    record_video=False,
