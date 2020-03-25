@@ -2,8 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Categorical
-
 
 
 def init(m, gain=1.0):
@@ -25,9 +23,9 @@ class ACNet(nn.Module):
         self.fc_v = nn.Linear(512, 1)
         self.fc_pi = nn.Linear(512, action_dim)
 
-        # self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
-        # self.fc_pi.apply(lambda m: init(m, 0.01))
-        # self.fc_v.apply(lambda m: init(m, 1.0))
+        self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
+        self.fc_pi.apply(lambda m: init(m, 0.01))
+        self.fc_v.apply(lambda m: init(m, 1.0))
 
     def forward(self, x):
         features = self.convs(x)
@@ -52,10 +50,10 @@ class LightACNet(nn.Module):
         self.fc_v = nn.Linear(256, 1)
         self.fc_pi = nn.Linear(256, action_dim)
 
-        # self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
-        # self.fc_pi.apply(lambda m: init(m, 0.01))
-        # self.fc_v.apply(lambda m: init(m, 1.0))
-        # self.lstm.apply(lambda m: init(m, 1.0))
+        self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
+        self.fc_pi.apply(lambda m: init(m, 0.01))
+        self.fc_v.apply(lambda m: init(m, 1.0))
+        self.lstm.apply(lambda m: init(m, 1.0))
 
 
     def forward(self, x):
