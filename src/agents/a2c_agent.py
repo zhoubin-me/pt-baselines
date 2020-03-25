@@ -20,10 +20,12 @@ class A2CAgent(BaseAgent):
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
 
-        if cfg.optimizer == 'rmpsprop':
+        if cfg.optimizer == 'rmspprop':
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
+        else:
+            raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 
         if cfg.use_lr_decay:
             scheduler = lambda step : 1 - step / (cfg.max_steps / cfg.num_processes * cfg.nsteps)
