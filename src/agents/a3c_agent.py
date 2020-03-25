@@ -7,7 +7,7 @@ import numpy as np
 
 from collections import deque
 
-from src.agents.base_agent import BaseAgent
+from .base_agent import BaseAgent
 from src.common.utils import close_obj, make_a3c_env
 from src.common.normalizer import SignNormalizer
 from src.common.logger import EpochLogger
@@ -135,7 +135,7 @@ class A3CAgent(BaseAgent):
         self.test_env = make_a3c_env(
             cfg.game,
             f'{cfg.log_dir}/test',
-            True,
+            False,
             max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
         )()
@@ -176,9 +176,9 @@ class A3CAgent(BaseAgent):
             actor.start()
             actor.set_network(self.network)
 
-
         logger = self.logger
         t0 = time.time()
+        last_epoch = 0
 
         while self.counter.value < self.cfg.max_steps:
             test_returns = self.eval_episodes()
@@ -193,6 +193,13 @@ class A3CAgent(BaseAgent):
                 "MinTestEpRet": np.min(test_returns),
                 "WallTime(min)": (time.time() - t0) / 60}
             logger.dump_test(test_tabular)
+            epoch = self.counter.value // self.cfg.save_interval
+            if epoch > last_epoch:
+                self.save(f'{self.cfg.ckpt_dir}/{epoch:08d}')
+                last_epoch = epoch
+
+
+
 
         for actor in self.actors:
             actor.join()

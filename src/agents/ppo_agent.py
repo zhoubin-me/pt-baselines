@@ -1,7 +1,7 @@
 import torch
 from torch.distributions import Categorical
 
-from src.agents.a2c_agent import A2CAgent
+from .a2c_agent import A2CAgent
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 

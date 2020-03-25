@@ -4,7 +4,7 @@ from torch.distributions import Categorical
 import time
 from collections import namedtuple
 
-from src.agents.base_agent import BaseAgent
+from .base_agent import BaseAgent
 from src.common.utils import make_vec_envs
 from src.common.model import ACNet
 from src.common.logger import EpochLogger
@@ -147,4 +147,5 @@ class A2CAgent(BaseAgent):
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 
-
+            if self.total_steps % cfg.save_interval == 0:
+                self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')

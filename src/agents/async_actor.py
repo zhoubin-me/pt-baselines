@@ -1,6 +1,6 @@
 import torch.multiprocessing as mp
 from collections import deque
-import copy
+
 # Copied from ShangtongZhang/DeepRL
 # https://github.com/ShangtongZhang/DeepRL/blob/master/deep_rl/agent/BaseAgent.py
 

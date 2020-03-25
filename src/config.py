@@ -22,7 +22,7 @@ class RainbowConfig:
     adam_lr = 0.0000625
     adam_eps = 0.00015
 
-    max_steps = int(5e7)
+    max_steps = int(1e7)
     max_episode_steps = 108000
     log_interval = 10000
     eval_interval = 100000
@@ -60,8 +60,9 @@ class A3CConfig:
     max_grad_norm = 40
 
     max_episode_steps = 108000
-    max_steps = int(4e7)
+    max_steps = int(1e7)
     eval_episodes = 10
+    save_interval = 1000000
 
     ckpt = ""
     log_dir = ""

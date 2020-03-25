@@ -5,9 +5,9 @@ import torch.multiprocessing as mp
 import numpy as np
 from collections import deque
 
-from src.agents.async_actor import AsyncActor
+from .base_agent import BaseAgent
+from .async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.agents.base_agent import BaseAgent
 from src.common.utils import close_obj, tensor, make_deepq_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
@@ -69,7 +69,7 @@ class RainbowAgent(BaseAgent):
         self.test_env = make_deepq_env(
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/test',
-            record_video=True,
+            record_video=False,
             max_episode_steps=cfg.max_episode_steps,
             episode_life=False,
             seed=cfg.seed
@@ -234,9 +234,6 @@ class RainbowAgent(BaseAgent):
         while self.total_steps < cfg.max_steps:
             self.step()
 
-            if self.total_steps % cfg.save_interval == 0:
-                self.save(f'{cfg.ckpt_dir}/{self.total_steps}')
-
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
@@ -259,6 +256,9 @@ class RainbowAgent(BaseAgent):
                     "MaxTestEpRet": np.max(test_returns),
                     "MinTestEpRet": np.min(test_returns)}
                 logger.dump_test(test_tabular)
+
+            if self.total_steps % cfg.save_interval == 0:
+                self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
 
         self.close()
 
