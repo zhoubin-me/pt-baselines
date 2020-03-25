@@ -27,7 +27,7 @@ if __name__ == '__main__':
     else:
         random_seed(args.seed)
 
-    if args.algo == 'A3C':
+    if args.algo == 'A3C' or args.algo == 'Rainbow':
         set_thread(1)
 
 
