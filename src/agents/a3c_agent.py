@@ -9,7 +9,7 @@ from collections import deque
 
 from .base_agent import BaseAgent
 from src.common.utils import close_obj, make_a3c_env
-from src.common.normalizer import SignNormalizer
+from src.common.normalizer import SignNormalizer, ImageNormalizer
 from src.common.logger import EpochLogger
 from src.common.model import LightACNet as ACNet
 
@@ -140,6 +140,7 @@ class A3CAgent(BaseAgent):
             seed=cfg.seed
         )()
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
+        self.state_normalizer = ImageNormalizer()
 
         self.network = ACNet(self.test_env.observation_space.shape[0], self.test_env.action_space.n)
 
