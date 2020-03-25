@@ -20,7 +20,7 @@ class A2CAgent(BaseAgent):
 
         self.network = ACNet(4, self.envs.action_space.n).cuda()
 
-        if cfg.optimizer == 'rmspprop':
+        if cfg.optimizer == 'rmsprop':
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
