@@ -178,7 +178,7 @@ class A3CAgent(BaseAgent):
 
         logger = self.logger
         t0 = time.time()
-        last_epoch = 0
+        last_epoch = -1
 
         while self.counter.value < self.cfg.max_steps:
             test_returns = self.eval_episodes()

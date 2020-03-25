@@ -126,6 +126,7 @@ class A2CAgent(BaseAgent):
         logger = self.logger
         logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
+        last_epoch = -1
 
         states = self.envs.reset()
         self.rollouts.obs[0].copy_(self.state_normalizer(states))
@@ -147,5 +148,7 @@ class A2CAgent(BaseAgent):
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 
-            if self.total_steps % cfg.save_interval == 0:
+            epoch = self.total_steps // self.cfg.save_interval
+            if epoch > last_epoch:
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
+                last_epoch = epoch

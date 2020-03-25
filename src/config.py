@@ -26,7 +26,7 @@ class RainbowConfig:
     max_episode_steps = 108000
     log_interval = 10000
     eval_interval = 100000
-    save_interval = 1000000
+    save_interval = int(1e6)
     eval_episodes = 10
 
     exploration_steps = 20000
@@ -62,7 +62,7 @@ class A3CConfig:
     max_episode_steps = 108000
     max_steps = int(1e7)
     eval_episodes = 10
-    save_interval = 1000000
+    save_interval = int(1e6)
 
     ckpt = ""
     log_dir = ""
@@ -89,9 +89,10 @@ class A2CConfig:
     max_grad_norm = 0.5
 
     max_episode_steps = 108000
-    max_steps = int(5e7)
-    log_interval = 8000
+    max_steps = int(1e7)
+    log_interval = nsteps * num_processes * 10
     eval_episodes = 10
+    save_interval = int(1e6)
     use_lr_decay = False
 
     ckpt = ""
@@ -126,6 +127,7 @@ class PPOConfig:
     max_steps = int(1e7)
     log_interval = nsteps * num_processes * 10
     eval_episodes = 10
+    save_interval = int(1e6)
     use_lr_decay = True
 
     ckpt = ""
