@@ -122,7 +122,7 @@ class PPOConfig:
     clip_param = 0.1
 
     max_episode_steps = 108000
-    max_steps = int(5e7)
+    max_steps = int(1e7)
     log_interval = nsteps * num_processes * 10
     eval_episodes = 10
     use_lr_decay = True
