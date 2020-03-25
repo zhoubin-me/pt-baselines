@@ -90,7 +90,7 @@ class A2CConfig:
 
     max_episode_steps = 108000
     max_steps = int(1e7)
-    log_interval = nsteps * num_processes * 10
+    log_interval = nsteps * num_processes * 100
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = False
