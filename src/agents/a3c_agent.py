@@ -113,7 +113,8 @@ class A3CActor(mp.Process):
             self._optimizer.zero_grad()
             loss = policy_loss + cfg.value_loss_coef * value_loss
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
+            if cfg.max_grad_norm is not None:
+                torch.nn.utils.clip_grad_norm_(self._network.parameters(), cfg.max_grad_norm)
             with self.lock:
                 self._optimizer.step()
             self._optimizer.step()
