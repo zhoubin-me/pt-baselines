@@ -15,7 +15,7 @@ class ACNet(nn.Module):
         super(ACNet, self).__init__()
 
         self.convs = nn.Sequential(
-            nn.Conv2d(4, 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
             nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
             nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
             nn.Linear(32 * 7 * 7, 512), nn.ReLU())
