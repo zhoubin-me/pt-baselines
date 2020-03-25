@@ -192,7 +192,9 @@ class A3CAgent(BaseAgent):
                 "StdTestEpRet": np.std(test_returns),
                 "MaxTestEpRet": np.max(test_returns),
                 "MinTestEpRet": np.min(test_returns),
-                "WallTime(min)": (time.time() - t0) / 60}
+                "WallTime(min)": (time.time() - t0) / 60,
+                "RemHrs": (self.cfg.max_steps - self.counter.value) / (self.counter.value / (time.time() - t0)) / 3600.0
+            }
             logger.dump_test(test_tabular)
             epoch = self.counter.value // self.cfg.save_interval
             if epoch > last_epoch:
