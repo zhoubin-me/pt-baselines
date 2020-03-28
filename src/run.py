@@ -1,12 +1,12 @@
 import numpy as np
 import argparse
 from src.common.utils import random_seed, mkdir, set_thread
-from src.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent
-from src.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig
+from src.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent, TRPOAgent
+from src.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig, TRPOConfig
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
-    parser.add_argument('algo', type=str, choices=['Rainbow', 'A2C', 'A3C', 'PPO'])
+    parser.add_argument('algo', type=str, choices=['Rainbow', 'A2C', 'A3C', 'PPO', 'TRPO'])
     args = parser.parse_known_args()
     cfg = eval(f'{args[0].algo}Config')
 
