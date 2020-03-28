@@ -10,15 +10,12 @@ class TRPOAgent(PPOAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
 
-
-
-
     def surrogate_loss(self, params, obs_batch, action_batch, action_log_probs_old, adv_batch):
         model_new = deepcopy(self.network)
-        vector_to_parameters(params, model_new.get_policy_params())
+        vector_to_parameters(params.float(), model_new.get_policy_params())
         _, logits = model_new(obs_batch)
         dist = Categorical(logits=logits)
-        action_log_probs_new = dist.log_prob(action_batch.suqeeze(-1)).unsqueeze(-1)
+        action_log_probs_new = dist.log_prob(action_batch.squeeze(-1)).unsqueeze(-1)
         surr_loss = torch.exp(action_log_probs_new - action_log_probs_old) * adv_batch
         return surr_loss.neg().mean()
 
@@ -29,7 +26,6 @@ class TRPOAgent(PPOAgent):
         fval = self.surrogate_loss(params, obs_batch, action_batch, action_log_probs, adv_batch)
 
         for (n, step_frac) in enumerate(0.5 ** np.arange(max_backtracks)):
-            print(f"Search number {n}")
             params_new = params.clone() + step_frac * fullstep
             new_fval = self.surrogate_loss(params_new, obs_batch, action_batch, action_log_probs, adv_batch)
             actual_improve = fval - new_fval
@@ -43,7 +39,7 @@ class TRPOAgent(PPOAgent):
     def hessian_vector_product(self, vector, obs_batch):
         self.optimizer.zero_grad()
         _, logits = self.network(obs_batch)
-        kld_loss = F.kl_div(F.log_softmax(logits), F.softmax(logits).detach())
+        kld_loss = F.kl_div(F.log_softmax(logits, dim=-1), F.softmax(logits, dim=-1).detach())
 
         kld_grad = torch.autograd.grad(kld_loss, self.network.get_policy_params(), create_graph=True)
         kdl_grad_vector = torch.cat([g.view(-1) for g in kld_grad])
@@ -103,7 +99,7 @@ class TRPOAgent(PPOAgent):
                 lm = torch.sqrt(shs / cfg.max_kl)
                 fullstep = step_direction / lm
                 g_dot_step_direction = grads.double().neg().dot(step_direction).detach()
-                theta = self.line_search(parameters_to_vector(self.network.parameters()),
+                theta = self.line_search(parameters_to_vector(self.network.get_policy_params()),
                                          fullstep,
                                          g_dot_step_direction / lm,
                                          obs_batch,
@@ -112,14 +108,14 @@ class TRPOAgent(PPOAgent):
                                          adv_batch)
 
                 old_model = deepcopy(self.network)
-                if torch.isnan(theta):
+                if torch.isnan(theta).any():
                     print("NAN detected")
                 else:
-                    vector_to_parameters(theta, self.network.get_policy_params())
+                    vector_to_parameters(theta.float(), self.network.get_policy_params())
 
                 _, logits = self.network(obs_batch)
-                kld = F.kl_div(F.log_softmax(logits), F.softmax(pis.detach()))
-                print(f"KL: {kld.item()}")
+                kld = F.kl_div(F.log_softmax(logits, dim=-1), F.softmax(pis.detach(), dim=-1))
+                print(f"KL: {kld.item():10.8f}, Max KL: {cfg.max_kl:10.8f}")
         #         theta = self.linesearch()
         #
         #         value_loss = (vs - return_batch).pow(2)
