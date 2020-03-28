@@ -103,7 +103,13 @@ class TRPOAgent(PPOAgent):
                 lm = torch.sqrt(shs / cfg.max_kl)
                 fullstep = step_direction / lm
                 g_dot_step_direction = grads.double().neg().dot(step_direction).detach()
-                theta = self.line_search(parameters_to_vector(self.network.parameters()))
+                theta = self.line_search(parameters_to_vector(self.network.parameters()),
+                                         fullstep,
+                                         g_dot_step_direction / lm,
+                                         obs_batch,
+                                         action_batch,
+                                         action_log_prob_batch,
+                                         adv_batch)
 
                 old_model = deepcopy(self.network)
                 if torch.isnan(theta):
