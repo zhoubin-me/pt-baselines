@@ -133,3 +133,41 @@ class PPOConfig:
     ckpt = ""
     log_dir = ""
     play = False
+
+class TRPOConfig:
+    game = "Pong"
+    seed = 0
+
+    num_processes = 8
+    use_gae = True
+
+    optimizer = 'adam'
+    nsteps = 128
+    gamma = 0.98
+    lr = 2.5e-4
+    eps = 1e-5
+    alpha = 0.99
+    epoches = 4
+    num_mini_batch = 4
+
+    max_kl = 0.001
+    cg_damping = 0.001
+    cg_iters = 10
+    residual_tol = 1e-10
+
+    gae_lambda = 0.95
+    entropy_coef = 0.01
+    value_loss_coef = 0.5
+    max_grad_norm = 0.5
+    clip_param = 0.1
+
+    max_episode_steps = 108000
+    max_steps = int(1e7)
+    log_interval = nsteps * num_processes * 10
+    eval_episodes = 10
+    save_interval = int(1e6)
+    use_lr_decay = True
+
+    ckpt = ""
+    log_dir = ""
+    play = False
