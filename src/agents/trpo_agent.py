@@ -2,7 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
-
+from copy import deepcopy
+import numpy as np
 from .ppo_agent import PPOAgent
 
 class TRPOAgent(PPOAgent):
@@ -10,17 +11,46 @@ class TRPOAgent(PPOAgent):
         super(TRPOAgent, self).__init__(cfg)
 
 
+
+
+    def surrogate_loss(self, params, obs_batch, action_batch, action_log_probs_old, adv_batch):
+        model_new = deepcopy(self.network)
+        vector_to_parameters(params, model_new.get_policy_params())
+        _, logits = model_new(obs_batch)
+        dist = Categorical(logits=logits)
+        action_log_probs_new = dist.log_prob(action_batch.suqeeze(-1)).unsqueeze(-1)
+        surr_loss = torch.exp(action_log_probs_new - action_log_probs_old) * adv_batch
+        return surr_loss.neg().mean()
+
+    def line_search(self, params, fullstep, expected_improve_rate, obs_batch, action_batch, action_log_probs, adv_batch):
+        accept_ratio = 0.1
+        max_backtracks = 10
+
+        fval = self.surrogate_loss(params, obs_batch, action_batch, action_log_probs, adv_batch)
+
+        for (n, step_frac) in enumerate(0.5 ** np.arange(max_backtracks)):
+            print(f"Search number {n}")
+            params_new = params.clone() + step_frac * fullstep
+            new_fval = self.surrogate_loss(params_new, obs_batch, action_batch, action_log_probs, adv_batch)
+            actual_improve = fval - new_fval
+            expected_improve_rate = expected_improve_rate * step_frac
+            ratio = actual_improve / expected_improve_rate
+            if ratio > accept_ratio and actual_improve > 0:
+                return params_new
+        return params
+
+
     def hessian_vector_product(self, vector, obs_batch):
         self.optimizer.zero_grad()
         _, logits = self.network(obs_batch)
         kld_loss = F.kl_div(F.log_softmax(logits), F.softmax(logits).detach())
 
-        kld_grad = torch.autograd.grad(kld_loss, self.network.parameters(), create_graph=True, allow_unused=True)
-        kdl_grad_vector = torch.cat([g.view(-1) for g in kld_grad if g is not None])
+        kld_grad = torch.autograd.grad(kld_loss, self.network.get_policy_params(), create_graph=True)
+        kdl_grad_vector = torch.cat([g.view(-1) for g in kld_grad])
         grad_vector_product = torch.sum(kdl_grad_vector * vector)
 
-        grad_grad = torch.autograd.grad(grad_vector_product, self.network.parameters(), allow_unused=True)
-        fisher_vector_product = torch.cat([g.contiguous().view(-1) for g in grad_grad if g is not None]).detach()
+        grad_grad = torch.autograd.grad(grad_vector_product, self.network.get_policy_params())
+        fisher_vector_product = torch.cat([g.contiguous().view(-1) for g in grad_grad]).detach()
         return fisher_vector_product + (self.cfg.cg_damping * vector.detach())
 
     def conjugate_gradient(self, grads, obs_batch):
@@ -66,13 +96,24 @@ class TRPOAgent(PPOAgent):
 
                 self.optimizer.zero_grad()
                 policy_loss.backward(retain_graph=True)
-                grads = parameters_to_vector([v.grad for v in self.network.parameters() if v.grad is not None]).squeeze()
+                grads = parameters_to_vector([v.grad for v in self.network.get_policy_params()]).squeeze()
 
                 step_direction = self.conjugate_gradient(grads.neg(), obs_batch)
                 shs = 0.5 * step_direction.dot(self.hessian_vector_product(step_direction, obs_batch))
                 lm = torch.sqrt(shs / cfg.max_kl)
+                fullstep = step_direction / lm
                 g_dot_step_direction = grads.double().neg().dot(step_direction).detach()
+                theta = self.line_search(parameters_to_vector(self.network.parameters()))
 
+                old_model = deepcopy(self.network)
+                if torch.isnan(theta):
+                    print("NAN detected")
+                else:
+                    vector_to_parameters(theta, self.network.get_policy_params())
+
+                _, logits = self.network(obs_batch)
+                kld = F.kl_div(F.log_softmax(logits), F.softmax(pis.detach()))
+                print(f"KL: {kld.item()}")
         #         theta = self.linesearch()
         #
         #         value_loss = (vs - return_batch).pow(2)

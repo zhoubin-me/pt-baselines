@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from itertools import chain
 
 def init(m, gain=1.0):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
@@ -26,6 +27,12 @@ class ACNet(nn.Module):
         self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
         self.fc_pi.apply(lambda m: init(m, 0.01))
         self.fc_v.apply(lambda m: init(m, 1.0))
+
+    def get_policy_params(self):
+        return chain(self.convs.parameters(), self.fc_pi.parameters())
+
+    def get_value_params(self):
+        return chain(self.convs.parameters(), self.fc_v.parameters())
 
     def forward(self, x):
         features = self.convs(x)
