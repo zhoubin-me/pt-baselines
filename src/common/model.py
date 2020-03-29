@@ -11,6 +11,36 @@ def init(m, gain=1.0):
         nn.init.zeros_(m.bias.data)
 
 
+class TRPONet(nn.Module):
+
+    def __init__(self, in_channels, action_dim):
+        self.v = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
+            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
+            nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
+            nn.Linear(512, 1)
+        )
+
+        self.pi = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
+            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
+            nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
+            nn.Linear(512, action_dim)
+        )
+
+    def forward(self, x):
+        v = self.v(x)
+        pi = self.pi(x)
+        return v, pi
+
+    def get_policy_params(self):
+        return self.pi.parameters()
+
+    def get_value_params(self):
+        return self.v.parameters()
+
 class ACNet(nn.Module):
     def __init__(self, in_channels, action_dim):
         super(ACNet, self).__init__()
@@ -27,12 +57,6 @@ class ACNet(nn.Module):
         self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
         self.fc_pi.apply(lambda m: init(m, 0.01))
         self.fc_v.apply(lambda m: init(m, 1.0))
-
-    def get_policy_params(self):
-        return chain(self.convs.parameters(), self.fc_pi.parameters())
-
-    def get_value_params(self):
-        return chain(self.convs.parameters(), self.fc_v.parameters())
 
     def forward(self, x):
         features = self.convs(x)

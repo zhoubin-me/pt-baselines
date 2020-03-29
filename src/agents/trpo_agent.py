@@ -5,10 +5,15 @@ from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_t
 from copy import deepcopy
 import numpy as np
 from .ppo_agent import PPOAgent
+from src.common.model import TRPONet
+from src.common.utils import explained_variance_1d
 
 class TRPOAgent(PPOAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
+
+        self.network = TRPONet(4, self.envs.action_space.n)
+        self.optimizer = torch.optim.Adam(self.network.parameters())
 
     def surrogate_loss(self, params, obs_batch, action_batch, action_log_probs_old, adv_batch):
         model_new = deepcopy(self.network)
@@ -107,15 +112,41 @@ class TRPOAgent(PPOAgent):
                                          action_log_prob_batch,
                                          adv_batch)
 
-                old_model = deepcopy(self.network)
                 if torch.isnan(theta).any():
                     print("NAN detected")
                 else:
                     vector_to_parameters(theta.float(), self.network.get_policy_params())
-
                 _, logits = self.network(obs_batch)
                 kld = F.kl_div(F.log_softmax(logits, dim=-1), F.softmax(pis.detach(), dim=-1))
-                print(f"KL: {kld.item():10.8f}, Max KL: {cfg.max_kl:10.8f}")
+                # print(f"KL: {kld.item():10.8f}, Max KL: {cfg.max_kl:10.8f}")
+
+                ## Updating Values
+                ev_before = explained_variance_1d(vs, return_batch)
+                self.optimizer.zero_grad()
+                params_old = parameters_to_vector(self.network.get_value_params())
+
+                for lr in self.cfg.lr * 0.5 ** np.arange(10):
+                    optimizer = torch.optim.LBFGS(self.network.get_value_params(), lr=lr)
+                    loss = F.mse_loss(vs, return_batch)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                    current_params = parameters_to_vector(self.network.get_value_params())
+                    if torch.isnan(current_params).any():
+                        vector_to_parameters(params_old, self.network.get_value_params())
+                vs_new, _ = self.network(obs_batch)
+                ev_after = explained_variance_1d(vs_new, return_batch)
+                if ev_after < ev_before or torch.abs(ev_after) < 1e-4:
+                    vector_to_parameters(params_old, self.network.get_value_params())
+
+
+
+
+                self.logger.store(KLD=kld.item())
+                self.logger.store(VLoss=ev_after.item())
+                self.logger.store(PLoss=policy_loss.item())
+
         #         theta = self.linesearch()
         #
         #         value_loss = (vs - return_batch).pow(2)

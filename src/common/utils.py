@@ -21,6 +21,15 @@ def tensor(x):
     x = torch.tensor(x, dtype=torch.float32).cuda()
     return x
 
+def explained_variance_1d(ypred, y):
+  """
+  Var[ypred - y] / var[y].
+  https://www.quora.com/What-is-the-meaning-proportion-of-variance-explained-in-linear-regression
+  """
+  vary = torch.var(y)
+  return None if vary == 0 else 1 - torch.var(y - ypred) / vary
+
+
 def close_obj(obj):
     if hasattr(obj, 'close'):
         obj.close()
