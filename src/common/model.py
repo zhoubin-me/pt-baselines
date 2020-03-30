@@ -12,8 +12,8 @@ def init(m, gain=1.0):
 
 
 class TRPONet(nn.Module):
-
     def __init__(self, in_channels, action_dim):
+        super(TRPONet, self).__init__()
         self.v = nn.Sequential(
             nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
             nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),

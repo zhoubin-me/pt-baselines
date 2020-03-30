@@ -12,7 +12,7 @@ class TRPOAgent(PPOAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
 
-        self.network = TRPONet(4, self.envs.action_space.n)
+        self.network = TRPONet(4, self.envs.action_space.n).cuda()
         self.optimizer = torch.optim.Adam(self.network.parameters())
 
     def surrogate_loss(self, params, obs_batch, action_batch, action_log_probs_old, adv_batch):
@@ -125,27 +125,34 @@ class TRPOAgent(PPOAgent):
                 self.optimizer.zero_grad()
                 params_old = parameters_to_vector(self.network.get_value_params())
 
-                for lr in self.cfg.lr * 0.5 ** np.arange(10):
-                    optimizer = torch.optim.LBFGS(self.network.get_value_params(), lr=lr)
+                optimizer = None
+                def closure():
+                    vs, _ = self.network(obs_batch)
                     loss = F.mse_loss(vs, return_batch)
                     optimizer.zero_grad()
                     loss.backward()
-                    optimizer.step()
+                    return loss
 
+                for lr in self.cfg.lr * 0.5 ** np.arange(10):
+                    optimizer = torch.optim.LBFGS(self.network.get_value_params(), lr)
+                    optimizer.step(closure)
                     current_params = parameters_to_vector(self.network.get_value_params())
                     if torch.isnan(current_params).any():
                         vector_to_parameters(params_old, self.network.get_value_params())
+
                 vs_new, _ = self.network(obs_batch)
                 ev_after = explained_variance_1d(vs_new, return_batch)
                 if ev_after < ev_before or torch.abs(ev_after) < 1e-4:
                     vector_to_parameters(params_old, self.network.get_value_params())
 
 
-
-
                 self.logger.store(KLD=kld.item())
                 self.logger.store(VLoss=ev_after.item())
                 self.logger.store(PLoss=policy_loss.item())
+
+                print(f"KLD: {kld.item():10.8f}, VLoss: {ev_after.item():10.5f}, PLoss: {policy_loss.item():10.5f}, Entropy: {entropy.item():10.5f}")
+        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
         #         theta = self.linesearch()
         #
