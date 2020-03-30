@@ -21,7 +21,7 @@ class PPOAgent(A2CAgent):
 
         for indices in sampler:
             obs_batch = rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape)[indices]
-            action_batch = rollouts.actions.view(-1, 1)[indices]
+            action_batch = rollouts.actions.view(-1, self.action_store_dim)[indices]
             action_log_prob_batch = rollouts.action_log_probs.view(-1, 1)[indices]
             value_batch = rollouts.values[:-1].view(-1, 1)[indices]
             mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]

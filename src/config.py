@@ -174,7 +174,7 @@ class TRPOConfig:
     log_interval = nsteps * num_processes * 10
     eval_episodes = 10
     save_interval = int(1e6)
-    use_lr_decay = True
+    use_lr_decay = False
 
     ckpt = ""
     log_dir = ""

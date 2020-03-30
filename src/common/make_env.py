@@ -72,5 +72,6 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, 
 
     envs = ShmemVecEnv(envs, context='fork')
     envs = VecPyTorch(envs)
-    envs = VecPyTorchFrameStack(envs, 4)
+    if env_type == 'atari':
+        envs = VecPyTorchFrameStack(envs, 4)
     return envs

@@ -24,12 +24,12 @@ class A2CAgent(BaseAgent):
             self.network = ConvNet(4, self.envs.action_space.n).cuda()
             self.reward_normalizer = SignNormalizer()
             self.state_normalizer = ImageNormalizer()
-            action_store_dim = 1
+            self.action_store_dim = 1
         elif cfg.env_type == 'mujoco':
             self.network = MLPNet(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).cuda()
             self.reward_normalizer = MeanStdNormalizer(clip=10)
             self.state_normalizer = MeanStdNormalizer(clip=5)
-            action_store_dim = self.envs.action_space.shape[0]
+            self.action_store_dim = self.envs.action_space.shape[0]
         else:
             raise NotImplementedError("No such environment")
 
@@ -50,8 +50,8 @@ class A2CAgent(BaseAgent):
 
         self.rollouts = Rollouts(
             obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(cfg.nsteps, cfg.num_processes, action_store_dim).cuda(),
-            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, action_store_dim).cuda(),
+            actions = torch.zeros(cfg.nsteps, cfg.num_processes, self.action_store_dim).cuda(),
+            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
             values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
             rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
             masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
@@ -81,13 +81,13 @@ class A2CAgent(BaseAgent):
                     dist = Categorical(logits=pi)
                     actions = dist.sample()
                     action_log_probs = dist.log_prob(actions)
-
                     actions = actions.unsqueeze(-1)
                     action_log_probs = action_log_probs.unsqueeze(-1)
+
                 elif isinstance(self.envs.action_space, Box):
                     dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
                     actions = dist.sample()
-                    action_log_probs = dist.log_prob(actions)
+                    action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
                 else:
                     raise NotImplementedError('No such action space')
 

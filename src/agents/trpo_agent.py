@@ -39,13 +39,13 @@ class TRPOAgent(PPOAgent):
                 ## For Policy Loss
                 def ploss_closure():
                     dist = network.pdist(obs_batch)
-                    action_log_probs = dist.log_prob(action_batch)
+                    action_log_probs = dist.log_prob(action_batch).sum(dim=1, keepdim=True)
                     p_loss = (adv_batch * torch.exp(action_log_probs - action_log_prob_batch)).mean().neg()
                     return p_loss
 
                 def kl_loss():
                     dist = network.pdist(obs_batch)
-                    action_log_probs = dist.log_prob(action_batch)
+                    action_log_probs = dist.log_prob(action_batch).sum(1, keepdim=True)
                     kl_loss = F.kl_div(action_log_probs, action_log_prob_batch.exp())
                     return kl_loss
 
@@ -70,6 +70,7 @@ class TRPOAgent(PPOAgent):
                         r -= alpha * _avp
                         new_rdotr = r.dot(r)
                         beta = new_rdotr / rdotr
+                        print(alpha, beta, x.norm(), p.norm())
                         p = r + beta * p
                         rdotr = new_rdotr
                         if rdotr < cfg.residual_tol:
@@ -78,7 +79,6 @@ class TRPOAgent(PPOAgent):
 
 
                 def linesearch(x, fullstep, expected_improve_rate):
-
                     with torch.no_grad():
                         fval = ploss_closure()
                     for (n, step_frac) in enumerate(0.5 ** np.arange(cfg.max_backtracks)):
@@ -95,7 +95,6 @@ class TRPOAgent(PPOAgent):
                                 return True, x_new
                     return False, x
 
-
                 policy_loss = ploss_closure()
                 grads = torch.autograd.grad(policy_loss, network.get_policy_params(), allow_unused=True)
                 grads = torch.cat([g.view(-1) for g in grads]).detach().neg()
@@ -103,6 +102,8 @@ class TRPOAgent(PPOAgent):
                 shs = 0.5 * (step_dir * Avp(step_dir)).sum()
                 lm = (shs / cfg.max_kl).sqrt()
                 fullstep = step_dir / lm
+
+                print(step_dir.norm(), shs, lm)
 
                 g_dot_dir = grads.dot(step_dir).neg()
                 print(f"LM:{lm.item()}, Grad Norm:{grads.norm().item()}")
