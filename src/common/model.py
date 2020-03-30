@@ -41,9 +41,41 @@ class TRPONet(nn.Module):
     def get_value_params(self):
         return self.v.parameters()
 
-class ACNet(nn.Module):
+class MLPNet(nn.Module):
+    def __init__(self, num_inputs, num_outputs):
+        super(MLPNet, self).__init__()
+
+        self.v = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(64, 1),
+        )
+
+        self.p = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(64, num_outputs)
+        )
+
+        self.p_log_std = nn.Parameter(torch.zeros(1, num_outputs), requires_grad=True)
+
+        self.apply(init)
+
+    def forward(self, x):
+        v = self.v(x)
+        p = self.p(x)
+        return v, p
+
+    def get_policy_params(self):
+        return chain(self.pi.parameters(), self.p_log_std)
+
+    def get_value_params(self):
+        return self.v.parameters()
+
+
+class ConvNet(nn.Module):
     def __init__(self, in_channels, action_dim):
-        super(ACNet, self).__init__()
+        super(ConvNet, self).__init__()
 
         self.convs = nn.Sequential(
             nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),

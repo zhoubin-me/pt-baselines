@@ -29,8 +29,6 @@ class PPOAgent(A2CAgent):
             adv_batch = adv.view(-1, 1)[indices]
             yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, adv_batch
 
-
-
     def update(self):
         cfg = self.cfg
 
@@ -63,17 +61,15 @@ class PPOAgent(A2CAgent):
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
 
-                self.logger.store(Loss=loss.item())
-                self.logger.store(VLoss=value_loss.item())
-                self.logger.store(PLoss=policy_loss.item())
-                self.logger.store(Entropy=entropy)
-                self.logger.store(Loss=loss)
+                kwargs = {
+                    'Loss': loss.item(),
+                    'VLoss': value_loss.item(),
+                    'PLoss': policy_loss.item(),
+                    'Entropy': entropy.item(),
+                }
+                self.logger.store(**kwargs)
 
-        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
-        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
 
 
 

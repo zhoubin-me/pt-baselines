@@ -2,6 +2,7 @@
 
 class RainbowConfig:
     game = 'Breakout'
+    env_type = 'atari'
     seed = 0
 
     dueling = True
@@ -46,6 +47,7 @@ class RainbowConfig:
 
 class A3CConfig:
     game = 'Pong'
+    env_type = 'atari'
     seed = 0
 
     num_actors = 16
@@ -71,6 +73,7 @@ class A3CConfig:
 
 class A2CConfig:
     game = "Pong"
+    env_type = 'atari'
     seed = 0
 
     num_processes = 16
@@ -102,6 +105,7 @@ class A2CConfig:
 
 class PPOConfig:
     game = "Pong"
+    env_type = 'atari'
     seed = 0
 
     num_processes = 8
@@ -136,6 +140,7 @@ class PPOConfig:
 
 class TRPOConfig:
     game = "Pong"
+    env_type = 'atari'
     seed = 0
 
     num_processes = 8
@@ -143,19 +148,22 @@ class TRPOConfig:
 
     optimizer = 'adam'
     nsteps = 128
-    gamma = 0.98
+    gamma = 0.995
     lr = 2.5e-4
     eps = 1e-5
     alpha = 0.99
     epoches = 4
-    num_mini_batch = 4
+    num_mini_batch = 2
 
-    max_kl = 0.001
-    cg_damping = 0.001
+    l2_reg = 1e-3
+    max_kl = 1e-2
+    cg_damping = 0.1
     cg_iters = 10
+    accept_ratio = 0.1
+    max_backtracks = 10
     residual_tol = 1e-10
 
-    gae_lambda = 0.95
+    gae_lambda = 0.97
     entropy_coef = 0.01
     value_loss_coef = 0.5
     max_grad_norm = 0.5

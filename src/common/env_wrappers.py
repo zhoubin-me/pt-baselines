@@ -348,6 +348,24 @@ class NormalizedEnv(gym.ObservationWrapper):
 
         return (observation - unbiased_mean) / (unbiased_std + 1e-8)
 
+class RunningStatEnv(gym.ObservationWrapper):
+    def __init__(self, env=None):
+        super(RunningStatEnv, self).__init__()
+        self._n = 0
+        self._M = 0
+        self._S = 0
+
+    def observation(self, observation):
+        x = np.asarray(observation)
+        self._n += 1
+        if self._n == 1:
+            self._M[...] = x
+        else:
+            oldM = self._M.copy()
+            self._M[...] = oldM + (x - oldM) / self._n
+            self._S[...] = self._S + (x - oldM) * (x - self._M)
+        pass
+
 
 def make_atari(env_id, max_episode_steps=108000):
     env = gym.make(env_id)

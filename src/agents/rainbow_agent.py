@@ -8,7 +8,8 @@ from collections import deque
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.common.utils import close_obj, tensor, make_deepq_env
+from src.common.utils import close_obj, tensor
+from src.common.make_env import make_atari_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
 from src.common.logger import EpochLogger
@@ -24,7 +25,7 @@ class RainbowActor(AsyncActor):
         cfg = self.cfg
         self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
 
-        self._env = make_deepq_env(
+        self._env = make_atari_env(
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/train',
             record_video=False,
@@ -66,7 +67,7 @@ class RainbowAgent(BaseAgent):
         super(RainbowAgent, self).__init__(cfg)
         self.lock = mp.Lock()
         self.actor = RainbowActor(cfg, self.lock)
-        self.test_env = make_deepq_env(
+        self.test_env = make_atari_env(
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/test',
             record_video=False,

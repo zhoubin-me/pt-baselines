@@ -1,14 +1,15 @@
 import torch
-from torch.distributions import Categorical
+from torch.distributions import Categorical, Normal
+from gym.spaces import Box, Discrete
 
 import time
 from collections import namedtuple
 
 from .base_agent import BaseAgent
-from src.common.utils import make_vec_envs
-from src.common.model import ACNet
+from src.common.make_env import make_vec_envs
+from src.common.model import ConvNet, MLPNet
 from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer, ImageNormalizer
+from src.common.normalizer import SignNormalizer, ImageNormalizer, MeanStdNormalizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
 
@@ -18,7 +19,18 @@ class A2CAgent(BaseAgent):
 
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
 
-        self.network = ACNet(4, self.envs.action_space.n).cuda()
+        if cfg.env_type == 'atari':
+            self.network = ConvNet(4, self.envs.action_space.n).cuda()
+            self.reward_normalizer = SignNormalizer()
+            self.state_normalizer = ImageNormalizer()
+            action_store_dim = 1
+        elif cfg.env_type == 'mujoco':
+            self.network = MLPNet(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).cuda()
+            self.reward_normalizer = MeanStdNormalizer(clip=10)
+            self.state_normalizer = MeanStdNormalizer(clip=5)
+            action_store_dim = self.envs.action_space.shape[0]
+        else:
+            raise NotImplementedError("No such environment")
 
         if cfg.optimizer == 'rmsprop':
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
@@ -34,13 +46,11 @@ class A2CAgent(BaseAgent):
             self.lr_scheduler = None
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
-        self.reward_normalizer = SignNormalizer()
-        self.state_normalizer = ImageNormalizer()
 
         self.rollouts = Rollouts(
             obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
+            actions = torch.zeros(cfg.nsteps, cfg.num_processes, action_store_dim).cuda(),
+            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, action_store_dim).cuda(),
             values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
             rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
             masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
@@ -54,17 +64,40 @@ class A2CAgent(BaseAgent):
         cfg = self.cfg
         with torch.no_grad():
             for step in range(cfg.nsteps):
+
+                if self.total_steps == 0:
+                    states = self.envs.reset()
+                    self.rollouts.obs[0].copy_(self.state_normalizer(states))
+                elif step == 0:
+                    if self.lr_scheduler is not None:
+                        self.lr_scheduler.step()
+                    self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+                    self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
+
                 v, pi = self.network(self.rollouts.obs[step])
-                dist = Categorical(logits=pi)
-                actions = dist.sample()
-                action_log_probs = dist.log_prob(actions)
+
+                if isinstance(self.envs.action_space, Discrete):
+                    dist = Categorical(logits=pi)
+                    actions = dist.sample()
+                    action_log_probs = dist.log_prob(actions)
+
+                    actions = actions.unsqueeze(-1)
+                    action_log_probs = action_log_probs.unsqueeze(-1)
+                elif isinstance(self.envs.action_space, Box):
+                    dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
+                    actions = dist.sample()
+                    action_log_probs = dist.log_prob(actions)
+                else:
+                    raise NotImplementedError('No such action space')
+
                 states, rewards, dones, infos = self.envs.step(actions)
                 self.total_steps += cfg.num_processes
+                rewards = self.reward_normalizer(rewards)
 
                 self.rollouts.masks[step + 1].copy_(1 - dones)
-                self.rollouts.actions[step].copy_(actions.unsqueeze(-1))
+                self.rollouts.actions[step].copy_(actions)
                 self.rollouts.values[step].copy_(v)
-                self.rollouts.action_log_probs[step].copy_(action_log_probs.unsqueeze(-1))
+                self.rollouts.action_log_probs[step].copy_(action_log_probs)
                 self.rollouts.rewards[step].copy_(rewards)
                 self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
@@ -73,7 +106,7 @@ class A2CAgent(BaseAgent):
                         self.logger.store(TrainEpRet=info['episode']['r'])
 
             # Compute R and GAE
-            v_next, _, = self.network(self.rollouts.obs[-1])
+            v_next, _ = self.network(self.rollouts.obs[-1])
 
             if cfg.use_gae:
                 self.rollouts.values[-1].copy_(v_next)
@@ -108,30 +141,25 @@ class A2CAgent(BaseAgent):
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
         self.optimizer.step()
 
-        self.logger.store(Loss=loss.item())
-        self.logger.store(VLoss=value_loss.item())
-        self.logger.store(PLoss=policy_loss.item())
-        self.logger.store(Entropy=entropy)
-        self.logger.store(Loss=loss)
+        kwargs = {
+            'Loss': loss.item(),
+            'VLoss': value_loss.item(),
+            'PLoss': policy_loss.item(),
+            'Entropy': entropy.item(),
+        }
 
-
-        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
-        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
-
+        self.logger.store(**kwargs)
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
 
     def run(self):
         cfg = self.cfg
         logger = self.logger
-        logger.store(TrainEpRet=0, VLoss=0, PLoss=0, Entropy=0)
+        logger.store(TrainEpRet=0, Loss=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
         last_epoch = -1
 
-        states = self.envs.reset()
-        self.rollouts.obs[0].copy_(self.state_normalizer(states))
         while self.total_steps < cfg.max_steps:
-
             self.step()
             self.update()
 

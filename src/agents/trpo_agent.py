@@ -1,183 +1,119 @@
 import torch
 import torch.nn.functional as F
-from torch.distributions import Categorical
+from torch.distributions import Categorical, Normal
 from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
-from copy import deepcopy
+
 import numpy as np
 from .ppo_agent import PPOAgent
-from src.common.model import TRPONet
-from src.common.utils import explained_variance_1d
+
 
 class TRPOAgent(PPOAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
 
-        self.network = TRPONet(4, self.envs.action_space.n).cuda()
-        self.optimizer = torch.optim.Adam(self.network.parameters())
-
-    def surrogate_loss(self, params, obs_batch, action_batch, action_log_probs_old, adv_batch):
-        model_new = deepcopy(self.network)
-        vector_to_parameters(params.float(), model_new.get_policy_params())
-        _, logits = model_new(obs_batch)
-        dist = Categorical(logits=logits)
-        action_log_probs_new = dist.log_prob(action_batch.squeeze(-1)).unsqueeze(-1)
-        surr_loss = torch.exp(action_log_probs_new - action_log_probs_old) * adv_batch
-        return surr_loss.neg().mean()
-
-    def line_search(self, params, fullstep, expected_improve_rate, obs_batch, action_batch, action_log_probs, adv_batch):
-        accept_ratio = 0.1
-        max_backtracks = 10
-
-        fval = self.surrogate_loss(params, obs_batch, action_batch, action_log_probs, adv_batch)
-
-        for (n, step_frac) in enumerate(0.5 ** np.arange(max_backtracks)):
-            params_new = params.clone() + step_frac * fullstep
-            new_fval = self.surrogate_loss(params_new, obs_batch, action_batch, action_log_probs, adv_batch)
-            actual_improve = fval - new_fval
-            expected_improve_rate = expected_improve_rate * step_frac
-            ratio = actual_improve / expected_improve_rate
-            if ratio > accept_ratio and actual_improve > 0:
-                return params_new
-        return params
-
-
-    def hessian_vector_product(self, vector, obs_batch):
-        self.optimizer.zero_grad()
-        _, logits = self.network(obs_batch)
-        kld_loss = F.kl_div(F.log_softmax(logits, dim=-1), F.softmax(logits, dim=-1).detach())
-
-        kld_grad = torch.autograd.grad(kld_loss, self.network.get_policy_params(), create_graph=True)
-        kdl_grad_vector = torch.cat([g.view(-1) for g in kld_grad])
-        grad_vector_product = torch.sum(kdl_grad_vector * vector)
-
-        grad_grad = torch.autograd.grad(grad_vector_product, self.network.get_policy_params())
-        fisher_vector_product = torch.cat([g.contiguous().view(-1) for g in grad_grad]).detach()
-        return fisher_vector_product + (self.cfg.cg_damping * vector.detach())
-
-    def conjugate_gradient(self, grads, obs_batch):
-        cfg = self.cfg
-
-        p = grads.clone().double()
-        r = grads.clone().double()
-        x = torch.zeros_like(r).double()
-        rdotr = r.dot(r)
-        for _ in range(cfg.cg_iters):
-            z = self.hessian_vector_product(p, obs_batch).squeeze()
-            v = rdotr / p.dot(z)
-            x += v * p
-            r -= v * z
-
-            newrdotr = r.dot(r)
-            mu = newrdotr / rdotr
-            p = r + mu * p
-            rdotr = newrdotr
-            if rdotr < cfg.residual_tol:
-                break
-        return x
-
+        self.value_optimizer = torch.optim.LBFGS(self.network.get_value_params(), max_iter=25)
 
     def update(self):
-
         cfg = self.cfg
-
+        network = self.network
+        logger = self.logger
         for epoch in range(cfg.epoches):
             sampler = self.sample()
             for batch_data in sampler:
                 obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, adv_batch = batch_data
 
-                vs, pis = self.network(obs_batch)
-                dist = Categorical(logits=pis)
-                log_probs = dist.log_prob(action_batch.view(-1)).unsqueeze(-1)
-                entropy = dist.entropy().mean()
+                ## For Value Loss
+                def vloss_closure():
+                    self.value_optimizer.zero_grad()
+                    v = network.v(obs_batch)
+                    v_loss = (v - return_batch).view(-1, 1).pow(2).mean()
+                    v_loss.backward()
+                    for param in network.get_value_params():
+                        v_loss += param.pow(2).sum() * cfg.l2_reg
+                    return v_loss
 
-                ratio = torch.exp(log_probs - action_log_prob_batch)
-                surr1 = ratio * adv_batch
-                surr2 = torch.clamp(ratio, 1.0 - cfg.clip_param, 1.0 + cfg.clip_param) * adv_batch
-                policy_loss = torch.min(surr1, surr2).mean().neg() + entropy.neg() * cfg.entropy_coef
+                self.value_optimizer.step(vloss_closure)
+                value_loss = vloss_closure()
+                logger.store(VLoss=value_loss.item())
 
-                self.optimizer.zero_grad()
-                policy_loss.backward(retain_graph=True)
-                grads = parameters_to_vector([v.grad for v in self.network.get_policy_params()]).squeeze()
+                ## For Policy Loss
+                def ploss_closure():
+                    pis = network.p(obs_batch)
+                    dist = Normal(pis, network.p_log_std.expand_as(pis).exp())
+                    action_log_probs = dist.log_prob(action_batch)
+                    p_loss = (adv_batch * torch.exp(action_log_probs - action_log_prob_batch)).mean().neg()
+                    return p_loss
 
-                step_direction = self.conjugate_gradient(grads.neg(), obs_batch)
-                shs = 0.5 * step_direction.dot(self.hessian_vector_product(step_direction, obs_batch))
-                lm = torch.sqrt(shs / cfg.max_kl)
-                fullstep = step_direction / lm
-                g_dot_step_direction = grads.double().neg().dot(step_direction).detach()
-                theta = self.line_search(parameters_to_vector(self.network.get_policy_params()),
-                                         fullstep,
-                                         g_dot_step_direction / lm,
-                                         obs_batch,
-                                         action_batch,
-                                         action_log_prob_batch,
-                                         adv_batch)
+                def kl_loss():
+                    pis = network.p(obs_batch)
+                    dist = Normal(pis, network.p_log_std.expand_as(pis).exp())
+                    action_log_probs = dist.log_prob(action_batch)
+                    kl_loss = F.kl_div(action_log_probs, action_log_prob_batch.exp())
+                    return kl_loss
 
-                if torch.isnan(theta).any():
-                    print("NAN detected")
-                else:
-                    vector_to_parameters(theta.float(), self.network.get_policy_params())
-                _, logits = self.network(obs_batch)
-                kld = F.kl_div(F.log_softmax(logits, dim=-1), F.softmax(pis.detach(), dim=-1))
-                # print(f"KL: {kld.item():10.8f}, Max KL: {cfg.max_kl:10.8f}")
+                def Avp(v):
+                    kl = kl_loss()
+                    grads = torch.autograd.grad(kl, network.get_policy_params(), create_graph=True)
+                    grads = torch.cat([g.view(-1) for g in grads])
+                    kl_v = (grads * v).sum()
+                    grads_grads = torch.autograd.grad(kl_v, network.get_policy_params())
+                    grads_grads = torch.cat([g.contiguous().view(-1) for g in grads_grads]).detach()
+                    return grads_grads + cfg.cg_damping * v
 
-                ## Updating Values
-                ev_before = explained_variance_1d(vs, return_batch)
-                self.optimizer.zero_grad()
-                params_old = parameters_to_vector(self.network.get_value_params())
-
-                optimizer = None
-                def closure():
-                    vs, _ = self.network(obs_batch)
-                    loss = F.mse_loss(vs, return_batch)
-                    optimizer.zero_grad()
-                    loss.backward()
-                    return loss
-
-                for lr in self.cfg.lr * 0.5 ** np.arange(10):
-                    optimizer = torch.optim.LBFGS(self.network.get_value_params(), lr)
-                    optimizer.step(closure)
-                    current_params = parameters_to_vector(self.network.get_value_params())
-                    if torch.isnan(current_params).any():
-                        vector_to_parameters(params_old, self.network.get_value_params())
-
-                vs_new, _ = self.network(obs_batch)
-                ev_after = explained_variance_1d(vs_new, return_batch)
-                if ev_after < ev_before or torch.abs(ev_after) < 1e-4:
-                    vector_to_parameters(params_old, self.network.get_value_params())
+                def conjugate_gradients(b):
+                    x = torch.zeros_like(b)
+                    r = b.clone()
+                    p = b.clone()
+                    rdotr = r.dot(r)
+                    for i in range(cfg.cg_iters):
+                        _avp = Avp(p)
+                        alpha = rdotr / p.dot(_avp)
+                        x += alpha * p
+                        r -= alpha * _avp
+                        new_rdotr = r.dot(r)
+                        beta = new_rdotr / rdotr
+                        p = r + beta * p
+                        rdotr = new_rdotr
+                        if rdotr < cfg.residual_tol:
+                            break
+                    return x
 
 
-                self.logger.store(KLD=kld.item())
-                self.logger.store(VLoss=ev_after.item())
-                self.logger.store(PLoss=policy_loss.item())
+                def linesearch(x, fullstep, expected_improve_rate):
 
-                print(f"KLD: {kld.item():10.8f}, VLoss: {ev_after.item():10.5f}, PLoss: {policy_loss.item():10.5f}, Entropy: {entropy.item():10.5f}")
-        self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
-        self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
+                    with torch.no_grad():
+                        fval = ploss_closure()
+                    for (n, step_frac) in enumerate(0.5 ** np.arange(cfg.max_backtracks)):
+                        x_new = x + step_frac * fullstep
+                        vector_to_parameters(x_new, network.get_policy_params())
+                        with torch.no_grad():
+                            new_fval = ploss_closure()
 
-        #         theta = self.linesearch()
-        #
-        #         value_loss = (vs - return_batch).pow(2)
-        #
-        #         vs_clipped = value_batch + (vs - value_batch).clamp(-cfg.clip_param, cfg.clip_param)
-        #         vs_loss_clipped = (vs_clipped - return_batch).pow(2)
-        #
-        #         value_loss = 0.5 * torch.max(value_loss, vs_loss_clipped).mean()
-        #
-        #         loss = value_loss * cfg.value_loss_coef + policy_loss - entropy * cfg.entropy_coef
-        #
-        #         self.optimizer.zero_grad()
-        #         loss.backward()
-        #         torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
-        #         self.optimizer.step()
-        #
-        #         self.logger.store(Loss=loss.item())
-        #         self.logger.store(VLoss=value_loss.item())
-        #         self.logger.store(PLoss=policy_loss.item())
-        #         self.logger.store(Entropy=entropy)
-        #         self.logger.store(Loss=loss)
-        #
-        # self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
-        # self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
-        #
-        # if self.lr_scheduler is not None:
-        #     self.lr_scheduler.step()
+                            actual_improve = fval - new_fval
+                            expected_improve = expected_improve_rate * step_frac
+                            ratio = actual_improve / expected_improve
+
+                            if ratio.item() > cfg.accept_ratio:
+                                return True, x_new
+                    return False, x
+
+
+                policy_loss = ploss_closure()
+                grads = torch.autograd.grad(policy_loss, network.get_policy_params())
+                grads = torch.cat([g.view(-1) for g in grads]).detach().neg()
+                step_dir = conjugate_gradients(grads)
+                shs = 0.5 * (step_dir * Avp(step_dir)).sum()
+                lm = (shs / cfg.max_kl).sqrt()
+                fullstep = step_dir / lm
+
+                g_dot_dir = grads.dot(step_dir).neg()
+                print(f"LM:{lm.item()}, Grad Norm:{grads.norm().item()}")
+
+                prev_params = parameters_to_vector(network.get_policy_params())
+                success, new_params = linesearch(prev_params, fullstep, g_dot_dir / lm)
+                vector_to_parameters(new_params, network.get_policy_params())
+                print(f"Update {'Success' if success else 'Failed'}")
+                kl_loss = kl_loss()
+
+                logger.store(PLoss=policy_loss.item())
+                logger.store(Entropy=kl_loss.item())
