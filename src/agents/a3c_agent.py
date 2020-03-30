@@ -8,7 +8,8 @@ import numpy as np
 from collections import deque
 
 from .base_agent import BaseAgent
-from src.common.utils import close_obj, make_a3c_env
+from src.common.utils import close_obj
+from src.common.make_env import make_a3c_env
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 from src.common.logger import EpochLogger
 from src.common.model import LightACNet as ACNet

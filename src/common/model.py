@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torch.distributions import Normal, Categorical
+
 from itertools import chain
 
 def init(m, gain=1.0):
@@ -57,7 +59,7 @@ class MLPNet(nn.Module):
             nn.Linear(64, num_outputs)
         )
 
-        self.p_log_std = nn.Parameter(torch.zeros(1, num_outputs), requires_grad=True)
+        self.register_parameter('p_log_std', nn.Parameter(torch.zeros(1, num_outputs)))
 
         self.apply(init)
 
@@ -66,8 +68,13 @@ class MLPNet(nn.Module):
         p = self.p(x)
         return v, p
 
+    def pdist(self, x):
+        p = self.p(x)
+        dist = Normal(p, self.p_log_std.expand_as(p).exp())
+        return dist
+
     def get_policy_params(self):
-        return chain(self.pi.parameters(), self.p_log_std)
+        return chain(self.p.parameters(), iter([self.p_log_std]))
 
     def get_value_params(self):
         return self.v.parameters()

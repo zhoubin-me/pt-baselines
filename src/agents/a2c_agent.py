@@ -17,7 +17,8 @@ class A2CAgent(BaseAgent):
     def __init__(self, cfg):
         super(A2CAgent, self).__init__(cfg)
 
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False)
+        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, \
+                log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
 
         if cfg.env_type == 'atari':
             self.network = ConvNet(4, self.envs.action_space.n).cuda()

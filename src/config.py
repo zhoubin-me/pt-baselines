@@ -139,8 +139,8 @@ class PPOConfig:
     play = False
 
 class TRPOConfig:
-    game = "Pong"
-    env_type = 'atari'
+    game = "Reacher"
+    env_type = 'mujoco'
     seed = 0
 
     num_processes = 8

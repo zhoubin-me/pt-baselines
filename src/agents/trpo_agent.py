@@ -38,15 +38,13 @@ class TRPOAgent(PPOAgent):
 
                 ## For Policy Loss
                 def ploss_closure():
-                    pis = network.p(obs_batch)
-                    dist = Normal(pis, network.p_log_std.expand_as(pis).exp())
+                    dist = network.pdist(obs_batch)
                     action_log_probs = dist.log_prob(action_batch)
                     p_loss = (adv_batch * torch.exp(action_log_probs - action_log_prob_batch)).mean().neg()
                     return p_loss
 
                 def kl_loss():
-                    pis = network.p(obs_batch)
-                    dist = Normal(pis, network.p_log_std.expand_as(pis).exp())
+                    dist = network.pdist(obs_batch)
                     action_log_probs = dist.log_prob(action_batch)
                     kl_loss = F.kl_div(action_log_probs, action_log_prob_batch.exp())
                     return kl_loss
@@ -99,7 +97,7 @@ class TRPOAgent(PPOAgent):
 
 
                 policy_loss = ploss_closure()
-                grads = torch.autograd.grad(policy_loss, network.get_policy_params())
+                grads = torch.autograd.grad(policy_loss, network.get_policy_params(), allow_unused=True)
                 grads = torch.cat([g.view(-1) for g in grads]).detach().neg()
                 step_dir = conjugate_gradients(grads)
                 shs = 0.5 * (step_dir * Avp(step_dir)).sum()
@@ -111,8 +109,9 @@ class TRPOAgent(PPOAgent):
 
                 prev_params = parameters_to_vector(network.get_policy_params())
                 success, new_params = linesearch(prev_params, fullstep, g_dot_dir / lm)
+                if not success:
+                    print("Failed")
                 vector_to_parameters(new_params, network.get_policy_params())
-                print(f"Update {'Success' if success else 'Failed'}")
                 kl_loss = kl_loss()
 
                 logger.store(PLoss=policy_loss.item())
