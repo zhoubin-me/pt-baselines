@@ -40,8 +40,6 @@ class A2CAgent(BaseAgent):
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
-        elif cfg.optimizer == 'lbfgs':
-            self.optimizer = torch.optim.LBFGS(self.network.get_value_params(), max_iter=25)
         else:
             raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 

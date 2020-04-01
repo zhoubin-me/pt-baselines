@@ -21,7 +21,7 @@ class Config:
     use_lr_decay = False
 
     # Optimizer related
-    optimizer = 'lbfgs'
+    optimizer = 'adam'
     lr = 3e-4
     eps = 1e-5
     gamma = 0.995

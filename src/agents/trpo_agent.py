@@ -10,34 +10,27 @@ class TRPOAgent(A2CAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
 
-    def vloss_closure(self, states, targets):
-        values_ = self.network.v(states)
-        v_loss = 0.5 * (values_ - targets).pow(2).mean()
-        for param in self.network.v.parameters():
-            v_loss += param.pow(2).sum() * self.cfg.l2_reg
-        self.optimizer.zero_grad()
-        v_loss.backward()
-        return v_loss
-
-    def get_ploss(self, states, actions, advs, old_log_probs):
+    def policy_loss(self, states, actions, advs, old_log_probs):
         pis = self.network.p(states)
         if isinstance(self.envs.action_space, Discrete):
             pdist = Categorical(logits=pis)
             log_prob = pdist.log_prob(actions.view(-1)).unsqueeze(-1)
+            entropy = pdist.entropy().mean()
         elif isinstance(self.envs.action_space, Box):
             pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
             log_prob = pdist.log_prob(actions).sum(-1, keepdim=True)
+            entropy = pdist.entropy().sum(-1).mean()
         else:
             raise NotImplementedError('No such action space')
 
-        action_loss = -advs * torch.exp(log_prob - old_log_probs)
+        action_loss = advs.neg() * torch.exp(log_prob - old_log_probs) + self.cfg.entropy_coef * entropy.neg()
         return action_loss.mean()
 
     def get_kl(self, state):
 
         if isinstance(self.envs.action_space, Discrete):
             pis = self.network.p(state)
-            kl = F.kl_div(pis.log_softmax(dim=-1), (pis + 1e-8).softmax(dim=-1), reduction='batchmean')
+            kl = F.kl_div(pis.log_softmax(dim=-1), (pis + 1e-8).softmax(dim=-1).detach(), reduction='batchmean')
         elif isinstance(self.envs.action_space, Box):
             mean1 = self.network.p(state)
             log_std1 = self.network.p_log_std.expand_as(mean1)
@@ -89,11 +82,11 @@ class TRPOAgent(A2CAgent):
                    expected_improve_rate,
                    max_backtracks=10,
                    accept_ratio=.1):
-        fval = self.get_ploss(states, actions, advs, old_log_prbs).detach()
+        fval = self.policy_loss(states, actions, advs, old_log_prbs).detach()
         for (_n_backtracks, stepfrac) in enumerate(0.5 ** np.arange(max_backtracks)):
             xnew = x + stepfrac * fullstep
             vector_to_parameters(xnew, self.network.get_policy_params())
-            newfval = self.get_ploss(states, actions, advs, old_log_prbs).detach()
+            newfval = self.policy_loss(states, actions, advs, old_log_prbs).detach()
             actual_improve = fval - newfval
             expected_improve = expected_improve_rate * stepfrac
             ratio = actual_improve / expected_improve
@@ -111,30 +104,26 @@ class TRPOAgent(A2CAgent):
             for batch_data in sampler:
                 obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
 
-                for d in batch_data:
-                    if torch.any(torch.isnan(d)):
-                        import pdb
-                        pdb.set_trace()
-
-                v_params_old = parameters_to_vector(self.network.get_value_params())
-                self.optimizer.step(lambda: self.vloss_closure(obs_batch, gae_batch + value_batch))
-                value_loss = self.vloss_closure(obs_batch, gae_batch + value_batch)
-                if value_loss.item() > 100:
-                    vector_to_parameters(v_params_old, self.network.get_value_params())
-
-
-
                 vs, pis = self.network(obs_batch)
+                value_loss = (vs - return_batch - gae_batch).pow(2).mean() * 0.5
+
+                self.optimizer.zero_grad()
+                value_loss.backward()
+                self.optimizer.step()
+
                 if isinstance(self.envs.action_space, Discrete):
                     pdist = Categorical(logits=pis)
                     fixed_log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1).detach()
+                    entropy = pdist.entropy().mean()
                 elif isinstance(self.envs.action_space, Box):
                     pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
                     fixed_log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True).detach()
+                    entropy = pdist.entropy().sum(-1).mean()
                 else:
                     raise NotImplementedError('No such action space')
 
-                policy_loss = self.get_ploss(obs_batch, action_batch, adv_batch, fixed_log_prob)
+                entropy = pdist.entropy().mean()
+                policy_loss = self.policy_loss(obs_batch, action_batch, adv_batch, fixed_log_prob)
                 grads = torch.autograd.grad(policy_loss, self.network.get_policy_params())
                 loss_grad = torch.cat([grad.view(-1) for grad in grads]).detach()
 
@@ -156,6 +145,6 @@ class TRPOAgent(A2CAgent):
                     'Loss': 0,
                     'VLoss': value_loss.item(),
                     'PLoss': policy_loss.item(),
-                    'Entropy': 0,
+                    'Entropy': entropy.item()
                 }
                 self.logger.store(**kwargs)

@@ -21,8 +21,8 @@ class Config:
     use_lr_decay = False
 
     # Optimizer related
-    optimizer = 'lbfgs'
-    lr = 3e-4
+    optimizer = 'adam'
+    lr = 2.5e-4
     eps = 1e-5
     gamma = 0.995
 
@@ -37,7 +37,7 @@ class Config:
     # Loss related
     l2_reg = 1e-3
     gae_lambda = 0.97
-    entropy_coef = 0.0
+    entropy_coef = 0.01
     value_loss_coef = 0.5
     max_grad_norm = 0.5
     clip_param = 0.1
