@@ -210,7 +210,7 @@ class A2CAgent(BaseAgent):
         logger = self.logger
         logger.store(TrainEpRet=0, Loss=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
-        last_epoch = -1
+        last_epoch = 1
 
         while self.total_steps < cfg.max_steps:
             self.step()
