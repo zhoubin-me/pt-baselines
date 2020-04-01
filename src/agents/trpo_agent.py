@@ -64,7 +64,7 @@ class TRPOAgent(A2CAgent):
 
         return flat_grad_grad_kl + v * self.cfg.cg_damping
 
-    def conjugate_gradients(self, b, state, residual_tol=1e-10):
+    def conjugate_gradients(self, b, state):
         x = torch.zeros_like(b)
         r = b - self.Fvp(x, state)
         p = r
@@ -79,7 +79,7 @@ class TRPOAgent(A2CAgent):
             betta = new_rdotr / rdotr
             p = r + betta * p
             rdotr = new_rdotr
-            if rdotr < residual_tol:
+            if rdotr < self.cfg.residual_tol:
                 break
         return x
 
