@@ -10,7 +10,7 @@ def make_env(game, env_type, **kwargs):
     if env_type == 'atari':
         return make_atari_env(game, **kwargs)
     elif env_type == 'mujoco':
-        return make_bullet_env(game, **kwargs)
+        return make_mujoco_env(game, **kwargs)
     elif env_type == 'bullet':
         return make_bullet_env(game, **kwargs)
     else:
