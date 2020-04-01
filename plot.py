@@ -11,8 +11,13 @@ from bokeh.palettes import *
 
 
 
-def main():
-    files = glob.glob('log/*/progress.txt')
+def plot(stage='train'):
+
+    if stage == 'train':
+        files = glob.glob('log/*/progress.txt')
+    else:
+        files = glob.glob('log/*/val.txt')
+
     print(files)
 
     figs = {}
@@ -34,24 +39,27 @@ def main():
                 figs[game] = {}
 
             for col in data.columns:
-                if 'Unnamed' not in col and 'TotalEnv' not in col:
-                    if col in ['RemHrs', 'NumOfEp']:
+                if 'Unnamed' not in col:
+                    if col in ['RemHrs', 'NumOfEp', 'Epoch', 'TotalEnvInteracts', 'Steps']:
                         continue
+                    key = 'TotalEnvInteracts' if stage == 'train' else 'Steps'
 
                     if col not in figs[game]:
                         figs[game][col] = figure(width=800, height=600, title=col)
 
                     fig = figs[game][col]
-                    fig.circle(data['TotalEnvInteracts'].values, data[col].values, legend=title, fill_color=color, color=color)
+                    fig.circle(data[key].values, data[col].values, legend=title, fill_color=color, color=color)
                     fig.legend.location = 'bottom_right'
 
     grids = []
     for g, fs in figs.items():
         grids.append(list(fs.values()))
         # output_file(f'log/{g}.html')
-    output_file(f'log/plot.html')
+    output_file(f'log/{stage}.html')
     p = gridplot(grids)
     save(p)
 
+
 if __name__ == '__main__':
-    main()
+    plot('train')
+    plot('test')

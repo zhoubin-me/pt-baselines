@@ -8,6 +8,8 @@ N = torch.cuda.device_count()
 cfgs = glob.glob('src/configs/*.py')
 
 for cfg in cfgs:
+    if 'PPO' not in cfg:
+        continue
     if 'atari' in cfg:
         for i, game in enumerate(_atari7):
             os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1')

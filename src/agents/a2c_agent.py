@@ -234,7 +234,6 @@ class A2CAgent(BaseAgent):
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 last_epoch = epoch
                 test_returns = self.eval_episodes()
-                logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
                 test_tabular = {
                     "Epoch": self.total_steps // cfg.save_interval,
                     "Steps": self.total_steps,
