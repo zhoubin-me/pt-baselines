@@ -29,7 +29,6 @@ class RainbowActor(AsyncActor):
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/train',
             record_video=False,
-            max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
         )()
 
@@ -71,7 +70,6 @@ class RainbowAgent(BaseAgent):
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/test',
             record_video=False,
-            max_episode_steps=cfg.max_episode_steps,
             episode_life=False,
             seed=cfg.seed
         )()
