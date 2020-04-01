@@ -1,7 +1,7 @@
 import gym
 import pybullet_envs
 from gym import wrappers
-from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimitMask
+from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv
 from src.common.monitor import Monitor
 from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack, DummyVecEnv, VecNormalize
 

@@ -1,0 +1,35 @@
+game: "Pong"
+algo: 'A2C'
+env_type: 'atari'
+seed: 0
+sep_body: False
+
+# Traing related
+num_processes: 16
+mini_epoches: 1
+num_mini_batch: 1
+
+# Optimizer related
+optimizer: 'rmsprop'
+mini_steps: 5
+gamma: 0.99
+lr: 7e-4
+eps: 1e-5
+alpha: 0.99
+
+# Loss related
+gae_lambda: 0.95
+entropy_coef: 0.01
+value_loss_coef: 0.5
+max_grad_norm: 0.5
+
+# Training related
+max_steps: 10,000,000
+log_interval: 8,000
+eval_episodes: 10
+save_interval: 1,000,000
+use_lr_decay: False
+
+ckpt: ""
+log_dir: ""
+play: False
