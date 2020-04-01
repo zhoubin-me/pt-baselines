@@ -1,5 +1,6 @@
 import gym
 import pybullet_envs
+import pybulletgym
 from gym import wrappers
 from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv
 from src.common.monitor import Monitor
@@ -9,16 +10,30 @@ def make_env(game, env_type, **kwargs):
     if env_type == 'atari':
         return make_atari_env(game, **kwargs)
     elif env_type == 'mujoco':
-        return make_robot_env(game, **kwargs)
+        return make_bullet_env(game, **kwargs)
+    elif env_type == 'bullet':
+        return make_bullet_env(game, **kwargs)
     else:
         raise NotImplementedError("Please implement yourself")
 
-def make_robot_env(game,
+def make_bullet_env(game,
                    log_prefix,
                    seed=1234,
                    **kwargs):
     def trunk():
         env = gym.make(f"{game}BulletEnv-v0")
+        env.seed(seed)
+        env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
+        return env
+    return trunk
+
+
+def make_mujoco_env(game,
+                   log_prefix,
+                   seed=1234,
+                   **kwargs):
+    def trunk():
+        env = gym.make(f"{game}MuJoCoEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
         return env
@@ -63,7 +78,7 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, e
     ]
 
     envs = ShmemVecEnv(envs, context='fork') if num_processes > 1 else DummyVecEnv(envs)
-    envs = VecNormalize(envs) if env_type == 'mujoco' else envs
+    envs = VecNormalize(envs) if env_type == 'mujoco' or env_type == 'bullet' else envs
 
     envs = VecPyTorch(envs)
     envs = VecPyTorchFrameStack(envs, 4) if env_type == 'atari' else envs

@@ -1,10 +1,16 @@
 import os
 import torch
-from src.common.bench import _atari7
+import glob
+from src.common.bench import _atari7, _mujoco8
 
-
-print(_atari7)
 
 N = torch.cuda.device_count()
-for i, game in enumerate(_atari7):
-    os.system(f'export CUDA_VISIBLE_DEVICES="{(i + 2)% N}";python -m run --game {game} --seed 1')
+cfgs = glob.glob('src/configs/*.py')
+
+for cfg in cfgs:
+    if 'atari' in cfg:
+        for i, game in enumerate(_atari7):
+            os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1')
+    elif 'mujoco' in cfg:
+        for i, game in enumerate(_mujoco8):
+            os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1')

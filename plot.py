@@ -17,18 +17,14 @@ def main():
 
     figs = {}
     colors = Category10[8]
-
     algos = []
-
 
     for idx, file in enumerate(files):
         with open(file, 'r') as f:
             data = pd.read_table(f)
             title = file.strip().split('/')[1]
             algo, game, seed = title.split('-')
-
             algo_seed = algo + seed
-
             if algo_seed not in algos:
                 algos.append(algo_seed)
             color_idx = algos.index(algo_seed)
@@ -49,14 +45,13 @@ def main():
                     fig.circle(data['TotalEnvInteracts'].values, data[col].values, legend=title, fill_color=color, color=color)
                     fig.legend.location = 'bottom_right'
 
-
-
-
     grids = []
     for g, fs in figs.items():
-        output_file(f'log/{g}.html')
-        p = column(list(fs.values()))
-        save(p)
+        grids.append(list(fs.values()))
+        # output_file(f'log/{g}.html')
+    output_file(f'log/plot.html')
+    p = gridplot(grids)
+    save(p)
 
 if __name__ == '__main__':
     main()

@@ -27,7 +27,7 @@ class A2CAgent(BaseAgent):
             self.reward_normalizer = SignNormalizer()
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
-        elif cfg.env_type == 'mujoco':
+        elif cfg.env_type == 'mujoco' or cfg.env_type == 'bullet':
             NET = SepBodyMLP if cfg.sep_body else MLPNet
             self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).cuda()
             self.reward_normalizer = lambda x: x
