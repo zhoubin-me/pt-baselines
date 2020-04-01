@@ -6,7 +6,7 @@ from src.config import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
-    parser.add_argument('algo', type=str, choices=['Rainbow', 'A2C', 'A3C', 'PPO', 'TRPO'])
+    parser.add_argument('run', type=str)
     parser.add_argument('env_type', type=str, choices=['atari', 'mujoco'])
     args = parser.parse_known_args()
     if args[0].env_type == 'atari':
