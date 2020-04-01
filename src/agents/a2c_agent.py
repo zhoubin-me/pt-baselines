@@ -67,8 +67,6 @@ class A2CAgent(BaseAgent):
         self.total_steps = 0
 
 
-
-
     def step(self):
         cfg = self.cfg
         with torch.no_grad():
@@ -164,17 +162,16 @@ class A2CAgent(BaseAgent):
                 if isinstance(self.envs.action_space, Discrete):
                     dist = Categorical(logits=pis)
                     log_probs = dist.log_prob(action_batch.view(-1)).unsqueeze(-1)
+                    entropy = dist.entropy().mean()
                 elif isinstance(self.envs.action_space, Box):
                     dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-                    log_probs = dist.log_prob(action_batch.view(-1, self.action_store_dim)).sum(dim=1, keepdim=True)
+                    log_probs = dist.log_prob(action_batch.view(-1, self.action_store_dim)).sum(-1, keepdim=True)
+                    entropy = dist.entropy().sum(-1).mean()
                 else:
                     raise NotImplementedError('No such action space')
 
                 value_loss = 0.5 * (vs - gae_batch - value_batch).pow(2).mean()
-
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()
-                entropy = dist.entropy().mean()
-
                 loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
                 self.optimizer.zero_grad()
