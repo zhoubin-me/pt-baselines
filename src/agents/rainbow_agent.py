@@ -68,8 +68,8 @@ class RainbowAgent(BaseAgent):
         self.actor = RainbowActor(cfg, self.lock)
         self.test_env = make_atari_env(
             game=cfg.game,
-            log_prefix=f'{cfg.log_dir}/test',
-            record_video=False,
+            log_prefix=cfg.log_dir,
+            is_test=True,
             episode_life=False,
             seed=cfg.seed
         )()
@@ -243,7 +243,8 @@ class RainbowAgent(BaseAgent):
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 
-            if self.total_steps % cfg.eval_interval == 0:
+            if self.total_steps % cfg.save_interval == 0:
+                self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 test_returns = self.eval_episodes()
                 logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
                 test_tabular = {
@@ -255,9 +256,6 @@ class RainbowAgent(BaseAgent):
                     "MaxTestEpRet": np.max(test_returns),
                     "MinTestEpRet": np.min(test_returns)}
                 logger.dump_test(test_tabular)
-
-            if self.total_steps % cfg.save_interval == 0:
-                self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
 
         self.close()
 

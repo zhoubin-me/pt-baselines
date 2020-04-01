@@ -229,11 +229,14 @@ class A2CAgent(BaseAgent):
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 
-            if self.total_steps % cfg.eval_interval == 0:
+            epoch = self.total_steps // self.cfg.save_interval
+            if epoch > last_epoch:
+                self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
+                last_epoch = epoch
                 test_returns = self.eval_episodes()
                 logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
                 test_tabular = {
-                    "Epoch": self.total_steps // cfg.eval_interval,
+                    "Epoch": self.total_steps // cfg.save_interval,
                     "Steps": self.total_steps,
                     "NumOfEp": len(test_returns),
                     "AverageTestEpRet": np.mean(test_returns),
@@ -241,9 +244,3 @@ class A2CAgent(BaseAgent):
                     "MaxTestEpRet": np.max(test_returns),
                     "MinTestEpRet": np.min(test_returns)}
                 logger.dump_test(test_tabular)
-
-
-            epoch = self.total_steps // self.cfg.save_interval
-            if epoch > last_epoch:
-                self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
-                last_epoch = epoch

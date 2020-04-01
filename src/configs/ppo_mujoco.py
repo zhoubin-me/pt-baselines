@@ -17,7 +17,7 @@ class Config:
     max_steps = int(1e6)
     log_interval = 4096
     eval_episodes = 10
-    save_interval = mini_steps * num_processes * 4
+    save_interval = int(1e5)
     use_lr_decay = True
     
     

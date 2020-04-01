@@ -17,7 +17,7 @@ class Config:
     max_steps = int(1e7)
     log_interval = mini_steps * num_processes
     eval_episodes = 10
-    save_interval = mini_steps * num_processes * 10
+    save_interval = int(1e6)
     use_lr_decay = False
 
     # Optimizer related
