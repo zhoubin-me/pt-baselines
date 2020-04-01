@@ -1,10 +1,10 @@
 import torch
 from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
 import numpy as np
-from .ppo_agent import PPOAgent
+from .ppo_agent import A2CAgent
 
 
-class TRPOAgent(PPOAgent):
+class TRPOAgent(A2CAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
 
@@ -94,7 +94,7 @@ class TRPOAgent(PPOAgent):
 
     def update(self):
         cfg = self.cfg
-        for epoch in range(cfg.epochs):
+        for epoch in range(cfg.mini_epoches):
             sampler = self.sample()
             for batch_data in sampler:
                 obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch = batch_data

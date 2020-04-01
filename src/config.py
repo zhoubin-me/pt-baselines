@@ -52,7 +52,7 @@ class A3CConfig:
 
     num_actors = 16
 
-    nsteps = 20
+    mini_steps = 20
     discount = 0.99
     adam_lr = 0.0001
 
@@ -77,10 +77,11 @@ class A2CConfig:
     seed = 0
 
     num_processes = 16
-    use_gae = False
+    mini_epoches = 1
+    num_mini_batch = 1
 
     optimizer = 'rmsprop'
-    nsteps = 5
+    mini_steps = 5
     gamma = 0.99
     lr = 7e-4
     eps = 1e-5
@@ -93,7 +94,7 @@ class A2CConfig:
 
     max_episode_steps = 108000
     max_steps = int(1e7)
-    log_interval = nsteps * num_processes * 100
+    log_interval = mini_steps * num_processes * 100
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = False
@@ -112,12 +113,12 @@ class PPOConfig:
     use_gae = True
 
     optimizer = 'adam'
-    nsteps = 128
+    mini_steps = 128
     gamma = 0.99
     lr = 2.5e-4
     eps = 1e-5
     alpha = 0.99
-    epoches = 4
+    mini_epoches = 4
     num_mini_batch = 4
 
 
@@ -129,7 +130,7 @@ class PPOConfig:
 
     max_episode_steps = 108000
     max_steps = int(1e7)
-    log_interval = nsteps * num_processes * 10
+    log_interval = mini_steps * num_processes * 10
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = True
@@ -147,12 +148,12 @@ class PPORobotConfig:
     use_gae = True
 
     optimizer = 'adam'
-    nsteps = 512
+    mini_steps = 512
     gamma = 0.99
     lr = 3e-4
     eps = 1e-5
     alpha = 0.99
-    epoches = 10
+    mini_epoches = 10
     num_mini_batch = 32
 
 
@@ -164,7 +165,7 @@ class PPORobotConfig:
 
     max_episode_steps = 108000
     max_steps = int(1e7)
-    log_interval = nsteps * num_processes * 2
+    log_interval = mini_steps * num_processes * 2
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = True
@@ -184,10 +185,10 @@ class TRPORobotConfig:
     optimizer = 'lbfgs'
     lr = 3e-4
     eps = 1e-5
-    nsteps = 2000
+    mini_steps = 2000
     gamma = 0.995
-    epochs = 1
-    num_mini_batch = 2
+    mini_epoches = 1
+    num_mini_batch = 1
 
     l2_reg = 1e-3
     max_kl = 1e-2
@@ -205,7 +206,7 @@ class TRPORobotConfig:
 
     max_episode_steps = 108000
     max_steps = int(1e7)
-    log_interval = nsteps * num_processes * 1
+    log_interval = mini_steps * num_processes * 1
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = False

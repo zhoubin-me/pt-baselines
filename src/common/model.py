@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.distributions import Normal, Categorical
-
+from gym.spaces import Box, Discrete
 from itertools import chain
 
 def init(m, gain=1.0):
@@ -13,40 +13,9 @@ def init(m, gain=1.0):
         nn.init.zeros_(m.bias.data)
 
 
-class TRPONet(nn.Module):
-    def __init__(self, in_channels, action_dim):
-        super(TRPONet, self).__init__()
-        self.v = nn.Sequential(
-            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
-            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
-            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
-            nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
-            nn.Linear(512, 1)
-        )
-
-        self.pi = nn.Sequential(
-            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
-            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
-            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
-            nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
-            nn.Linear(512, action_dim)
-        )
-
-    def forward(self, x):
-        v = self.v(x)
-        pi = self.pi(x)
-        return v, pi
-
-    def get_policy_params(self):
-        return self.pi.parameters()
-
-    def get_value_params(self):
-        return self.v.parameters()
-
 class MLPNet(nn.Module):
-    def __init__(self, num_inputs, num_outputs):
+    def __init__(self, num_inputs, action_dim):
         super(MLPNet, self).__init__()
-
         self.v = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
@@ -56,10 +25,10 @@ class MLPNet(nn.Module):
         self.p = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, num_outputs)
+            nn.Linear(64, action_dim)
         )
 
-        self.register_parameter('p_log_std', nn.Parameter(torch.zeros(1, num_outputs)))
+        self.register_parameter('p_log_std', nn.Parameter(torch.zeros(1, action_dim), requires_grad=True))
 
         self.apply(init)
 
@@ -103,6 +72,11 @@ class ConvNet(nn.Module):
         logits = self.fc_pi(features)
         return values, logits
 
+    def pdist(self, x):
+        features = self.convs(x)
+        logits = self.fc_pi(features)
+        dist = Categorical(logits=logits)
+        return dist
 
 class LightACNet(nn.Module):
     def __init__(self, in_channels, action_dim):

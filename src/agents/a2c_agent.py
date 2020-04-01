@@ -1,6 +1,7 @@
 import torch
 from torch.distributions import Categorical, Normal
 from gym.spaces import Box, Discrete
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 import time
 from collections import namedtuple
@@ -17,8 +18,7 @@ class A2CAgent(BaseAgent):
     def __init__(self, cfg):
         super(A2CAgent, self).__init__(cfg)
 
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, \
-                log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
+        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
 
         if cfg.env_type == 'atari':
             self.network = ConvNet(4, self.envs.action_space.n).cuda()
@@ -43,7 +43,7 @@ class A2CAgent(BaseAgent):
             raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 
         if cfg.use_lr_decay:
-            scheduler = lambda step : 1 - step / (cfg.max_steps / cfg.num_processes * cfg.nsteps)
+            scheduler = lambda step : 1 - step / (cfg.max_steps / cfg.num_processes * cfg.mini_steps)
             self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
         else:
             self.lr_scheduler = None
@@ -51,22 +51,25 @@ class A2CAgent(BaseAgent):
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
 
         self.rollouts = Rollouts(
-            obs = torch.zeros(cfg.nsteps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(cfg.nsteps, cfg.num_processes, self.action_store_dim).cuda(),
-            action_log_probs = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
-            masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            gaes = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
+            obs = torch.zeros(cfg.mini_steps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
+            actions = torch.zeros(cfg.mini_steps, cfg.num_processes, self.action_store_dim).cuda(),
+            action_log_probs = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).cuda(),
+            values = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
+            rewards = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).cuda(),
+            masks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
+            returns = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
+            gaes = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda()
         )
 
         self.total_steps = 0
 
+
+
+
     def step(self):
         cfg = self.cfg
         with torch.no_grad():
-            for step in range(cfg.nsteps):
+            for step in range(cfg.mini_steps):
 
                 if self.total_steps == 0:
                     states = self.envs.reset()
@@ -117,54 +120,71 @@ class A2CAgent(BaseAgent):
             self.rollouts.returns[-1].copy_(v_next)
             self.rollouts.gaes[-1].zero_()
 
-            for step in reversed(range(cfg.nsteps)):
+            for step in reversed(range(cfg.mini_steps)):
                 self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step + 1] + self.rollouts.rewards[step]
                 delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[step + 1] - self.rollouts.values[step]
                 self.rollouts.gaes[step] = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * self.rollouts.gaes[step+1]
 
 
+    def sample(self):
+        cfg = self.cfg
+        rollouts = self.rollouts
+        batch_size = cfg.num_processes * cfg.mini_steps
+        mini_batch_size = batch_size // cfg.num_mini_batch
+
+        sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=True)
+
+        for indices in sampler:
+            obs_batch = rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape)[indices]
+            action_batch = rollouts.actions.view(-1, self.action_store_dim)[indices]
+            action_log_prob_batch = rollouts.action_log_probs.view(-1, 1)[indices]
+            value_batch = rollouts.values[:-1].view(-1, 1)[indices]
+            mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]
+            return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
+            gae_batch = rollouts.gaes[:-1].view(-1, 1)[indices]
+            yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch
 
     def update(self):
         cfg = self.cfg
+        for epoch in range(cfg.mini_epoches):
+            sampler = self.sample()
+            for batch_data in sampler:
+                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch = batch_data
+                adv_batch = (gae_batch - gae_batch.mean()) / (gae_batch.std() + 1e-5)
 
-        vs, pis = self.network(self.rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape))
+                vs, pis = self.network(obs_batch)
 
-        if isinstance(self.envs.action_space, Discrete):
-            dist = Categorical(logits=pis)
-            log_probs = dist.log_prob(self.rollouts.actions.view(-1)).unsqueeze(-1)
+                if isinstance(self.envs.action_space, Discrete):
+                    dist = Categorical(logits=pis)
+                    log_probs = dist.log_prob(action_batch.view(-1)).unsqueeze(-1)
+                elif isinstance(self.envs.action_space, Box):
+                    dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
+                    log_probs = dist.log_prob(action_batch.view(-1, self.action_store_dim)).sum(dim=1, keepdim=True)
+                else:
+                    raise NotImplementedError('No such action space')
 
-        elif isinstance(self.envs.action_space, Box):
-            dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-            log_probs = dist.log_prob(self.rollouts.actions.view(-1, self.action_store_dim)).sum(dim=1, keepdim=True)
-        else:
-            raise NotImplementedError('No such action space')
+                value_loss = 0.5 * (vs - gae_batch - value_batch).pow(2).mean()
 
-        if cfg.use_gae:
-            advs = self.rollouts.gaes[:-1].view(-1, 1) + self.rollouts.values.view(-1, 1) - vs
-        else:
-            advs = self.rollouts.returns[:-1].view(-1, 1) - vs
+                policy_loss = (adv_batch.detach() * log_probs).mean().neg()
+                entropy = dist.entropy().mean()
 
-        value_loss = advs.pow(2).mean()
-        policy_loss = (advs.detach() * log_probs).mean().neg()
-        entropy = dist.entropy().mean()
+                loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
-        loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
+                self.optimizer.step()
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
-        self.optimizer.step()
+                kwargs = {
+                    'Loss': loss.item(),
+                    'VLoss': value_loss.item(),
+                    'PLoss': policy_loss.item(),
+                    'Entropy': entropy.item(),
+                }
 
-        kwargs = {
-            'Loss': loss.item(),
-            'VLoss': value_loss.item(),
-            'PLoss': policy_loss.item(),
-            'Entropy': entropy.item(),
-        }
-
-        self.logger.store(**kwargs)
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
+                self.logger.store(**kwargs)
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step()
 
     def run(self):
         cfg = self.cfg
