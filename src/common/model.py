@@ -13,15 +13,14 @@ def init(m, gain=1.0):
         nn.init.zeros_(m.bias.data)
 
 class SepBodyConv(nn.Module):
-    def __init__(self, in_channels, action_dim, action_space):
+    def __init__(self, in_channels, action_dim):
         super(SepBodyConv, self).__init__()
-        self.action_space = action_space
         self.v = nn.Sequential(
             nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
             nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
             nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
             nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(512, 1)
         )
 
         self.p = nn.Sequential(
@@ -29,7 +28,7 @@ class SepBodyConv(nn.Module):
             nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
             nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
             nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
-            nn.Linear(64, action_dim)
+            nn.Linear(512, action_dim)
         )
 
         self.apply(lambda m: init(m, nn.init.calculate_gain('relu')))

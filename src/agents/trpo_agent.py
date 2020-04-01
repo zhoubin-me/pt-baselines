@@ -23,10 +23,10 @@ class TRPOAgent(A2CAgent):
         pis = self.network.p(states)
         if isinstance(self.envs.action_space, Discrete):
             pdist = Categorical(logits=pis)
-            log_prob = pdist.log_prob(actions.view(-1)).unsqueeze(-1).detach()
+            log_prob = pdist.log_prob(actions.view(-1)).unsqueeze(-1)
         elif isinstance(self.envs.action_space, Box):
             pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-            log_prob = pdist.log_prob(actions).sum(-1, keepdim=True).detach()
+            log_prob = pdist.log_prob(actions).sum(-1, keepdim=True)
         else:
             raise NotImplementedError('No such action space')
 
@@ -37,7 +37,7 @@ class TRPOAgent(A2CAgent):
 
         if isinstance(self.envs.action_space, Discrete):
             pis = self.network.p(state)
-            kl = F.kl_div(pis.log_softmax(dim=-1), pis.softmax(dim=-1))
+            kl = F.kl_div(pis.log_softmax(dim=-1), (pis + 1e-8).softmax(dim=-1), reduction='batchmean')
         elif isinstance(self.envs.action_space, Box):
             mean1 = self.network.p(state)
             log_std1 = self.network.p_log_std.expand_as(mean1)
