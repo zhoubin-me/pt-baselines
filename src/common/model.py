@@ -37,8 +37,13 @@ class SepBodyMLP(nn.Module):
         logits = self.p(x)
         return values, logits
 
+    def pdist(self, x):
+        logits = self.p(x)
+        dist = Normal(logits, self.p_log_std.expand_as(logits).exp())
+        return dist
+
     def get_policy_params(self):
-        return chain(self.p.parameters(), lambda: self.p_log_std)
+        return chain(self.p.parameters(), iter([self.p_log_std]))
 
     def get_value_params(self):
         return self.v.parameters()

@@ -14,8 +14,7 @@ class PPOAgent(A2CAgent):
         for epoch in range(cfg.mini_epoches):
             sampler = self.sample()
             for batch_data in sampler:
-                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch = batch_data
-                adv_batch = (gae_batch - gae_batch.mean()) / (gae_batch.std() + 1e-5)
+                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
 
                 vs, pis = self.network(obs_batch)
 

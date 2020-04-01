@@ -45,7 +45,7 @@ class A2CAgent(BaseAgent):
             raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 
         if cfg.use_lr_decay:
-            scheduler = lambda step : 1 - step / (cfg.max_steps / cfg.num_processes * cfg.mini_steps)
+            scheduler = lambda step : 1 - step * cfg.num_processes * cfg.mini_steps / cfg.max_steps
             self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
         else:
             self.lr_scheduler = None
@@ -69,6 +69,7 @@ class A2CAgent(BaseAgent):
 
     def step(self):
         cfg = self.cfg
+        rollouts = self.rollouts
         with torch.no_grad():
             for step in range(cfg.mini_steps):
 
@@ -104,13 +105,13 @@ class A2CAgent(BaseAgent):
                 masks = 1.0 - dones
                 badmasks = tensor([[0.0] if 'TimeLimit.truncated' in info else [1.0] for info in infos])
 
-                self.rollouts.masks[step + 1].copy_(masks)
-                self.rollouts.badmasks[step + 1].copy_(badmasks)
-                self.rollouts.actions[step].copy_(actions)
-                self.rollouts.values[step].copy_(v)
-                self.rollouts.action_log_probs[step].copy_(action_log_probs)
-                self.rollouts.rewards[step].copy_(rewards)
-                self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
+                rollouts.masks[step + 1].copy_(masks)
+                rollouts.badmasks[step + 1].copy_(badmasks)
+                rollouts.actions[step].copy_(actions)
+                rollouts.values[step].copy_(v)
+                rollouts.action_log_probs[step].copy_(action_log_probs)
+                rollouts.rewards[step].copy_(rewards)
+                rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
 
 
@@ -121,14 +122,16 @@ class A2CAgent(BaseAgent):
             # Compute R and GAE
             v_next, _ = self.network(self.rollouts.obs[-1])
 
-            self.rollouts.values[-1].copy_(v_next)
-            self.rollouts.returns[-1].copy_(v_next)
-            self.rollouts.gaes[-1].zero_()
+            rollouts.values[-1].copy_(v_next)
+            rollouts.returns[-1].copy_(v_next)
+            rollouts.gaes[-1].zero_()
 
             for step in reversed(range(cfg.mini_steps)):
-                self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step + 1] + self.rollouts.rewards[step]
-                delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[step + 1] - self.rollouts.values[step]
-                self.rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * self.rollouts.gaes[step+1]) * self.rollouts.badmasks[step + 1]
+                R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
+                rollouts.returns[step] = R * rollouts.badmasks[step+ 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
+
+                delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
+                rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]) * rollouts.badmasks[step + 1]
 
 
     def sample(self):
@@ -137,6 +140,8 @@ class A2CAgent(BaseAgent):
         batch_size = cfg.num_processes * cfg.mini_steps
         mini_batch_size = batch_size // cfg.num_mini_batch
 
+        gaes = rollouts.gaes[:-1].view(-1, 1)
+        advs = (gaes - gaes.mean()) / (gaes.std() + 1e-5)
         sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=True)
 
         for indices in sampler:
@@ -147,15 +152,15 @@ class A2CAgent(BaseAgent):
             mask_batch = rollouts.masks[:-1].view(-1, 1)[indices]
             return_batch = rollouts.returns[:-1].view(-1, 1)[indices]
             gae_batch = rollouts.gaes[:-1].view(-1, 1)[indices]
-            yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch
+            adv_batch = advs[indices]
+            yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch
 
     def update(self):
         cfg = self.cfg
         for epoch in range(cfg.mini_epoches):
             sampler = self.sample()
             for batch_data in sampler:
-                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch = batch_data
-                adv_batch = (gae_batch - gae_batch.mean()) / (gae_batch.std() + 1e-5)
+                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
 
                 vs, pis = self.network(obs_batch)
 
@@ -170,7 +175,7 @@ class A2CAgent(BaseAgent):
                 else:
                     raise NotImplementedError('No such action space')
 
-                value_loss = 0.5 * (vs - gae_batch - value_batch).pow(2).mean()
+                value_loss = 0.5 * (vs - return_batch).pow(2).mean()
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()
                 loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
