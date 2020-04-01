@@ -1,18 +1,14 @@
 import numpy as np
 import argparse
+from importlib.machinery import SourceFileLoader
 from src.common.utils import random_seed, mkdir, set_thread
 from src.agents import *
-from src.config import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
-    parser.add_argument('run', type=str)
-    parser.add_argument('env_type', type=str, choices=['atari', 'mujoco'])
-    args = parser.parse_known_args()
-    if args[0].env_type == 'atari':
-        cfg = eval(f'{args[0].algo}Config')
-    else:
-        cfg = eval(f'{args[0].algo}RobotConfig')
+    parser.add_argument('cfg', type=str, help="Check configurations under src/configs/*.py")
+    args = parser.parse_known_args()[0]
+    cfg = SourceFileLoader('', args.cfg).load_module().Config
 
     for k, v in cfg.__dict__.items():
         if not k.startswith('_'):
