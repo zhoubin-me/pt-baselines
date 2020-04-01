@@ -3,14 +3,13 @@ from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_t
 import numpy as np
 from .ppo_agent import A2CAgent
 
-
 class TRPOAgent(A2CAgent):
     def __init__(self, cfg):
         super(TRPOAgent, self).__init__(cfg)
 
     def vloss_closure(self, states, targets):
         values_ = self.network.v(states)
-        v_loss = (values_ - targets).pow(2).mean()
+        v_loss = 0.5 * (values_ - targets).pow(2).mean()
         for param in self.network.v.parameters():
             v_loss += param.pow(2).sum() * self.cfg.l2_reg
         self.optimizer.zero_grad()
@@ -87,8 +86,7 @@ class TRPOAgent(A2CAgent):
 
             if ratio.item() > accept_ratio and actual_improve.item() > 0:
                 return True, xnew
-            else:
-                pass
+
         return False, x
 
 
@@ -98,16 +96,19 @@ class TRPOAgent(A2CAgent):
             sampler = self.sample()
             for batch_data in sampler:
                 obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch = batch_data
+                adv_batch = (gae_batch - gae_batch.mean()) / (gae_batch.std() + 1e-5)
 
                 for d in batch_data:
                     if torch.any(torch.isnan(d)):
-                        print("!!!!!!!!!!!!!!")
-                        print(d)
+                        import pdb
+                        pdb.set_trace()
 
-                adv_batch = (gae_batch - gae_batch.mean()) / (gae_batch.std() + 1e-5)
+                v_params_old = parameters_to_vector(self.network.get_value_params())
+                self.optimizer.step(lambda: self.vloss_closure(obs_batch, gae_batch + value_batch))
+                value_loss = self.vloss_closure(obs_batch, gae_batch + value_batch)
+                if value_loss.item() > 100:
+                    vector_to_parameters(v_params_old, self.network.get_value_params())
 
-                self.optimizer.step(lambda: self.vloss_closure(obs_batch, return_batch))
-                value_loss = self.vloss_closure(obs_batch, return_batch)
 
                 pdist = self.network.pdist(obs_batch)
                 fixed_log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True).detach()

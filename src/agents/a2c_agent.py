@@ -8,11 +8,12 @@ from collections import namedtuple
 
 from .base_agent import BaseAgent
 from src.common.make_env import make_vec_envs
-from src.common.model import ConvNet, MLPNet
+from src.common.model import ConvNet, MLPNet, SepBodyMLP
 from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer, ImageNormalizer, MeanStdNormalizer
+from src.common.normalizer import SignNormalizer, ImageNormalizer
+from src.common.utils import tensor
 
-Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns', 'gaes'])
+Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
 
 class A2CAgent(BaseAgent):
     def __init__(self, cfg):
@@ -26,9 +27,10 @@ class A2CAgent(BaseAgent):
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
         elif cfg.env_type == 'mujoco':
-            self.network = MLPNet(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).cuda()
-            self.reward_normalizer = MeanStdNormalizer(clip=10)
-            self.state_normalizer = MeanStdNormalizer(clip=5)
+            NET = SepBodyMLP if cfg.sep_body else MLPNet
+            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).cuda()
+            self.reward_normalizer = lambda x: x
+            self.state_normalizer = lambda x: x
             self.action_store_dim = self.envs.action_space.shape[0]
         else:
             raise NotImplementedError("No such environment")
@@ -57,6 +59,7 @@ class A2CAgent(BaseAgent):
             values = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
             rewards = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).cuda(),
             masks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
+            badmasks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
             returns = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
             gaes = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda()
         )
@@ -101,13 +104,17 @@ class A2CAgent(BaseAgent):
                 self.total_steps += cfg.num_processes
                 rewards = self.reward_normalizer(rewards)
                 masks = 1.0 - dones
+                badmasks = tensor([[0.0] if 'TimeLimit.truncated' in info else [1.0] for info in infos])
 
                 self.rollouts.masks[step + 1].copy_(masks)
+                self.rollouts.badmasks[step + 1].copy_(badmasks)
                 self.rollouts.actions[step].copy_(actions)
                 self.rollouts.values[step].copy_(v)
                 self.rollouts.action_log_probs[step].copy_(action_log_probs)
                 self.rollouts.rewards[step].copy_(rewards)
                 self.rollouts.obs[step + 1].copy_(self.state_normalizer(states))
+
+
 
                 for info in infos:
                     if 'episode' in info:
@@ -123,7 +130,7 @@ class A2CAgent(BaseAgent):
             for step in reversed(range(cfg.mini_steps)):
                 self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step + 1] + self.rollouts.rewards[step]
                 delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[step + 1] - self.rollouts.values[step]
-                self.rollouts.gaes[step] = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * self.rollouts.gaes[step+1]
+                self.rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * self.rollouts.gaes[step+1]) * self.rollouts.badmasks[step + 1]
 
 
     def sample(self):

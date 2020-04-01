@@ -7,23 +7,15 @@ from gym import spaces
 import cv2
 cv2.ocl.setUseOpenCL(False)
 
+class TimeLimitMask(gym.Wrapper):
+    def step(self, action):
+        obs, rew, done, info = self.env.step(action)
+        if done and self.env._max_episode_steps == self.env._elapsed_steps:
+            info['bad_transition'] = True
 
-class TimeLimit(gym.Wrapper):
-    def __init__(self, env, max_episode_steps=None):
-        super(TimeLimit, self).__init__(env)
-        self._max_episode_steps = max_episode_steps
-        self._elapsed_steps = 0
-
-    def step(self, ac):
-        observation, reward, done, info = self.env.step(ac)
-        self._elapsed_steps += 1
-        if self._elapsed_steps >= self._max_episode_steps:
-            done = True
-            info['TimeLimit.truncated'] = True
-        return observation, reward, done, info
+        return obs, rew, done, info
 
     def reset(self, **kwargs):
-        self._elapsed_steps = 0
         return self.env.reset(**kwargs)
 
 class ClipActionsWrapper(gym.Wrapper):
@@ -348,32 +340,13 @@ class NormalizedEnv(gym.ObservationWrapper):
 
         return (observation - unbiased_mean) / (unbiased_std + 1e-8)
 
-class RunningStatEnv(gym.ObservationWrapper):
-    def __init__(self, env=None):
-        super(RunningStatEnv, self).__init__()
-        self._n = 0
-        self._M = 0
-        self._S = 0
-
-    def observation(self, observation):
-        x = np.asarray(observation)
-        self._n += 1
-        if self._n == 1:
-            self._M[...] = x
-        else:
-            oldM = self._M.copy()
-            self._M[...] = oldM + (x - oldM) / self._n
-            self._S[...] = self._S + (x - oldM) * (x - self._M)
-        pass
 
 
-def make_atari(env_id, max_episode_steps=108000):
+def make_atari(env_id):
     env = gym.make(env_id)
     assert 'NoFrameskip' in env.spec.id
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
-    if max_episode_steps is not None:
-        env = TimeLimit(env, max_episode_steps=max_episode_steps)
     return env
 
 def wrap_deepmind(env, episode_life=False, clip_rewards=False, frame_stack=False, scale=False, transpose_image=True):

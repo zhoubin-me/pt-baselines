@@ -22,6 +22,7 @@ class PPOAgent(A2CAgent):
                 value_loss = (vs - gae_batch - value_batch).pow(2)
                 vs_clipped = value_batch + (vs - value_batch).clamp(-cfg.clip_param, cfg.clip_param)
                 vs_loss_clipped = (vs_clipped - gae_batch - value_batch).pow(2)
+                value_loss = 0.5 * torch.max(value_loss, vs_loss_clipped).mean()
 
                 if isinstance(self.envs.action_space, Discrete):
                     dist = Categorical(logits=pis)
@@ -35,14 +36,12 @@ class PPOAgent(A2CAgent):
                 else:
                     raise NotImplementedError('No such action space')
 
-
                 ratio = torch.exp(action_log_probs - action_log_prob_batch)
                 surr1 = ratio * adv_batch
                 surr2 = torch.clamp(ratio, 1.0 - cfg.clip_param, 1.0 + cfg.clip_param) * adv_batch
                 policy_loss = torch.min(surr1, surr2).mean().neg()
 
 
-                value_loss = 0.5 * torch.max(value_loss, vs_loss_clipped).mean()
 
                 loss = value_loss * cfg.value_loss_coef + policy_loss - entropy * cfg.entropy_coef
 

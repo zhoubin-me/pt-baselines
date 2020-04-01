@@ -13,13 +13,14 @@ def init(m, gain=1.0):
         nn.init.zeros_(m.bias.data)
 
 
-class MLPNet(nn.Module):
+class SepBodyMLP(nn.Module):
     def __init__(self, num_inputs, action_dim):
-        super(MLPNet, self).__init__()
+        super(SepBodyMLP, self).__init__()
+
         self.v = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, 1),
+            nn.Linear(64, 1)
         )
 
         self.p = nn.Sequential(
@@ -28,25 +29,40 @@ class MLPNet(nn.Module):
             nn.Linear(64, action_dim)
         )
 
-        self.register_parameter('p_log_std', nn.Parameter(torch.zeros(1, action_dim), requires_grad=True))
-
-        self.apply(init)
+        self.apply(lambda m: init(m, np.sqrt(2)))
+        self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
 
     def forward(self, x):
-        v = self.v(x)
-        p = self.p(x)
-        return v, p
-
-    def pdist(self, x):
-        p = self.p(x)
-        dist = Normal(p, self.p_log_std.expand_as(p).exp())
-        return dist
+        values = self.v(x)
+        logits = self.p(x)
+        return values, logits
 
     def get_policy_params(self):
-        return chain(self.p.parameters(), iter([self.p_log_std]))
+        return chain(self.p.parameters(), lambda: self.p_log_std)
 
     def get_value_params(self):
         return self.v.parameters()
+
+class MLPNet(nn.Module):
+    def __init__(self, num_inputs, action_dim):
+        super(MLPNet, self).__init__()
+
+        self.mlps = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+        )
+
+        self.v = nn.Linear(64, 1)
+        self.p = nn.Linear(64, action_dim)
+
+        self.apply(lambda m: init(m, np.sqrt(2)))
+        self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
+
+    def forward(self, x):
+        features = self.mlps(x)
+        values = self.v(features)
+        logits = self.p(features)
+        return values, logits
 
 
 class ConvNet(nn.Module):
@@ -59,24 +75,19 @@ class ConvNet(nn.Module):
             nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
             nn.Linear(32 * 7 * 7, 512), nn.ReLU())
 
-        self.fc_v = nn.Linear(512, 1)
-        self.fc_pi = nn.Linear(512, action_dim)
+        self.v = nn.Linear(512, 1)
+        self.p = nn.Linear(512, action_dim)
 
         self.convs.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
-        self.fc_pi.apply(lambda m: init(m, 0.01))
-        self.fc_v.apply(lambda m: init(m, 1.0))
+        self.p.apply(lambda m: init(m, 0.01))
+        self.v.apply(lambda m: init(m, 1.0))
 
     def forward(self, x):
         features = self.convs(x)
-        values = self.fc_v(features)
-        logits = self.fc_pi(features)
+        values = self.v(features)
+        logits = self.p(features)
         return values, logits
 
-    def pdist(self, x):
-        features = self.convs(x)
-        logits = self.fc_pi(features)
-        dist = Categorical(logits=logits)
-        return dist
 
 class LightACNet(nn.Module):
     def __init__(self, in_channels, action_dim):
