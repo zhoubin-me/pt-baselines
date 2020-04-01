@@ -26,7 +26,10 @@ def plot(stage='train'):
 
     for idx, file in enumerate(files):
         with open(file, 'r') as f:
-            data = pd.read_table(f)
+            try:
+                data = pd.read_table(f)
+            except:
+                continue
             title = file.strip().split('/')[1]
             algo, game, seed = title.split('-')
             algo_seed = algo + seed
@@ -54,7 +57,6 @@ def plot(stage='train'):
     grids = []
     for g, fs in figs.items():
         grids.append(list(fs.values()))
-        # output_file(f'log/{g}.html')
     output_file(f'log/{stage}.html')
     p = gridplot(grids)
     save(p)

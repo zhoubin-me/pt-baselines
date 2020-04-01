@@ -29,8 +29,6 @@ if __name__ == '__main__':
 
     if args.algo == 'A3C' or args.algo == 'Rainbow':
         set_thread(1)
-    elif args.num_processes > 1:
-        set_thread(1)
 
 
     mkdir(args.log_dir)

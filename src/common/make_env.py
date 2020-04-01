@@ -1,6 +1,6 @@
 import gym
 import pybullet_envs
-import pybulletgym
+# import pybulletgym
 from gym import wrappers
 from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv
 from src.common.monitor import Monitor
@@ -9,8 +9,9 @@ from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack, Du
 def make_env(game, env_type, **kwargs):
     if env_type == 'atari':
         return make_atari_env(game, **kwargs)
-    elif env_type == 'mujoco':
-        return make_mujoco_env(game, **kwargs)
+    elif env_type == 'mujoco' or 'bullet':
+        return make_bullet_env(game, **kwargs)
+        # return make_mujoco_env(game, **kwargs)
     elif env_type == 'bullet':
         return make_bullet_env(game, **kwargs)
     else:
@@ -21,7 +22,7 @@ def make_bullet_env(game, log_prefix, seed=1234, is_test=False, **kwargs):
         env = gym.make(f"{game}BulletEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        # env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
         return env
     return trunk
 
@@ -30,7 +31,7 @@ def make_mujoco_env(game, log_prefix, seed=1234, is_test=False, **kwargs):
         env = gym.make(f"{game}MuJoCoEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        # env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
         return env
     return trunk
 
@@ -49,7 +50,7 @@ def make_atari_env(game,
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=allow_early_resets)
         env = wrap_deepmind(env, episode_life=episode_life, clip_rewards=clip_rewards, frame_stack=frame_stack, transpose_image=transpose_image)
-        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        # env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
         return env
     return trunk
 
@@ -69,7 +70,7 @@ def make_a3c_env(game, log_prefix, is_test=False, seed=1234):
 def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, env_type='atari', is_test=False):
 
     envs = [
-        make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}' if not is_test else f'{log_dir}/test',
+        make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}' if not is_test else f'{log_dir}/test_',
                  seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets)
         for i in range(num_processes)
     ]
