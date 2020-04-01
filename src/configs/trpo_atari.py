@@ -2,22 +2,22 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    game = "Reacher"
+    game = "Pong"
     algo = "TRPO"
-    env_type = 'mujoco'
+    env_type = 'atari'
     sep_body = True
     seed = 0
 
     # Training related
-    num_processes = 1
-    mini_steps = 15000
+    num_processes = 8
+    mini_steps = 1024
     mini_epoches = 1
     num_mini_batch = 1
 
-    max_steps = int(1e6)
+    max_steps = int(1e7)
     log_interval = mini_steps * num_processes
     eval_episodes = 10
-    save_interval = 15000
+    save_interval = mini_steps * num_processes * 10
     use_lr_decay = False
 
     # Optimizer related
@@ -27,8 +27,8 @@ class Config:
     gamma = 0.995
 
     # TRPO related
-    max_kl = 1e-2
-    cg_damping = 0.1
+    max_kl = 1e-3
+    cg_damping = 1e-3
     cg_iters = 10
     accept_ratio = 0.1
     max_backtracks = 10

@@ -8,7 +8,7 @@ from collections import namedtuple
 
 from .base_agent import BaseAgent
 from src.common.make_env import make_vec_envs
-from src.common.model import ConvNet, MLPNet, SepBodyMLP
+from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 from src.common.utils import tensor
@@ -22,7 +22,8 @@ class A2CAgent(BaseAgent):
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
 
         if cfg.env_type == 'atari':
-            self.network = ConvNet(4, self.envs.action_space.n).cuda()
+            NET = SepBodyConv if cfg.sep_body else ConvNet
+            self.network = NET(4, self.envs.action_space.n).cuda()
             self.reward_normalizer = SignNormalizer()
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1

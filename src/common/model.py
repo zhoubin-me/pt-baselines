@@ -4,13 +4,49 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.distributions import Normal, Categorical
-from gym.spaces import Box, Discrete
 from itertools import chain
+from gym.spaces import Box, Discrete
 
 def init(m, gain=1.0):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data, gain)
         nn.init.zeros_(m.bias.data)
+
+class SepBodyConv(nn.Module):
+    def __init__(self, in_channels, action_dim, action_space):
+        super(SepBodyConv, self).__init__()
+        self.action_space = action_space
+        self.v = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
+            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
+            nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
+            nn.Linear(64, 1)
+        )
+
+        self.p = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
+            nn.Conv2d(64, 32, 3, stride=1), nn.ReLU(), nn.Flatten(),
+            nn.Linear(32 * 7 * 7, 512), nn.ReLU(),
+            nn.Linear(64, action_dim)
+        )
+
+        self.apply(lambda m: init(m, nn.init.calculate_gain('relu')))
+        self.v[-1].apply(lambda m: init(m, 1.0))
+        self.p[-1].apply(lambda m: init(m, 0.01))
+
+    def forward(self, x):
+        values = self.v(x)
+        logits = self.p(x)
+        return values, logits
+
+
+    def get_policy_params(self):
+        return self.p.parameters()
+
+    def get_value_params(self):
+        return self.v.parameters()
 
 
 class SepBodyMLP(nn.Module):
@@ -37,16 +73,12 @@ class SepBodyMLP(nn.Module):
         logits = self.p(x)
         return values, logits
 
-    def pdist(self, x):
-        logits = self.p(x)
-        dist = Normal(logits, self.p_log_std.expand_as(logits).exp())
-        return dist
-
     def get_policy_params(self):
         return chain(self.p.parameters(), iter([self.p_log_std]))
 
     def get_value_params(self):
         return self.v.parameters()
+
 
 class MLPNet(nn.Module):
     def __init__(self, num_inputs, action_dim):
