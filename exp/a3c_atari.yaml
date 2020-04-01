@@ -1,4 +1,3 @@
-
 game: 'Pong'
 env_type: 'atari'
 algo: 'A3C'

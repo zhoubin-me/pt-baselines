@@ -1,25 +1,25 @@
 game: "Pong"
-algo: 'A2C'
+algo: "PPO"
 env_type: 'atari'
 seed: 0
 sep_body: False
 
-# Traing related
-num_processes: 16
-mini_epoches: 1
-num_mini_batch: 1
+# Training related
+num_processes: 8
+mini_epoches: 4
+num_mini_batch: 4
+mini_steps: 128
 
 max_steps: 10,000,000
-log_interval: 8,000
+log_interval: 10240
 eval_episodes: 10
 save_interval: 1,000,000
-use_lr_decay: False
+use_lr_decay: True
 
-# Optimizer related
-optimizer: 'rmsprop'
-mini_steps: 5
+# Optimization related
+optimizer: 'adam'
 gamma: 0.99
-lr: 7e-4
+lr: 2.5e-4
 eps: 1e-5
 alpha: 0.99
 
@@ -28,7 +28,7 @@ gae_lambda: 0.95
 entropy_coef: 0.01
 value_loss_coef: 0.5
 max_grad_norm: 0.5
-
+clip_param: 0.1
 
 # Others
 ckpt: ""
