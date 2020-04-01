@@ -37,7 +37,6 @@ class A3CActor(mp.Process):
             cfg.game,
             f'{cfg.log_dir}/train_{self.n}',
             False,
-            max_episode_steps = cfg.max_episode_steps,
             seed=cfg.seed+self.n
         )()
 
@@ -137,7 +136,6 @@ class A3CAgent(BaseAgent):
             cfg.game,
             f'{cfg.log_dir}/test',
             False,
-            max_episode_steps=cfg.max_episode_steps,
             seed=cfg.seed
         )()
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
