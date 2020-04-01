@@ -138,7 +138,42 @@ class PPOConfig:
     log_dir = ""
     play = False
 
-class TRPOConfig:
+class PPORobotConfig:
+    game = "Reacher"
+    env_type = 'mujoco'
+    seed = 0
+
+    num_processes = 4
+    use_gae = True
+
+    optimizer = 'adam'
+    nsteps = 512
+    gamma = 0.99
+    lr = 3e-4
+    eps = 1e-5
+    alpha = 0.99
+    epoches = 10
+    num_mini_batch = 32
+
+
+    gae_lambda = 0.95
+    entropy_coef = 0
+    value_loss_coef = 0.5
+    max_grad_norm = 0.5
+    clip_param = 0.1
+
+    max_episode_steps = 108000
+    max_steps = int(1e7)
+    log_interval = nsteps * num_processes * 2
+    eval_episodes = 10
+    save_interval = int(1e6)
+    use_lr_decay = True
+
+    ckpt = ""
+    log_dir = ""
+    play = False
+
+class TRPORobotConfig:
     game = "Reacher"
     env_type = 'mujoco'
     seed = 0
@@ -146,13 +181,12 @@ class TRPOConfig:
     num_processes = 8
     use_gae = True
 
-    optimizer = 'adam'
-    nsteps = 128
-    gamma = 0.995
-    lr = 2.5e-4
+    optimizer = 'lbfgs'
+    lr = 3e-4
     eps = 1e-5
-    alpha = 0.99
-    epoches = 4
+    nsteps = 2000
+    gamma = 0.995
+    epochs = 1
     num_mini_batch = 2
 
     l2_reg = 1e-3
@@ -171,7 +205,7 @@ class TRPOConfig:
 
     max_episode_steps = 108000
     max_steps = int(1e7)
-    log_interval = nsteps * num_processes * 10
+    log_interval = nsteps * num_processes * 1
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = False

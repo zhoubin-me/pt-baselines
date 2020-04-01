@@ -11,7 +11,7 @@ from src.common.model import ConvNet, MLPNet
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer, MeanStdNormalizer
 
-Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns'])
+Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'returns', 'gaes'])
 
 class A2CAgent(BaseAgent):
     def __init__(self, cfg):
@@ -37,6 +37,8 @@ class A2CAgent(BaseAgent):
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
+        elif cfg.optimizer == 'lbfgs':
+            self.optimizer = torch.optim.LBFGS(self.network.get_value_params(), max_iter=25)
         else:
             raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 
@@ -55,11 +57,11 @@ class A2CAgent(BaseAgent):
             values = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
             rewards = torch.zeros(cfg.nsteps, cfg.num_processes, 1).cuda(),
             masks = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
-            returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
+            returns = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda(),
+            gaes = torch.zeros(cfg.nsteps + 1, cfg.num_processes, 1).cuda()
         )
 
         self.total_steps = 0
-
 
     def step(self):
         cfg = self.cfg
@@ -74,6 +76,7 @@ class A2CAgent(BaseAgent):
                         self.lr_scheduler.step()
                     self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
                     self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
+
 
                 v, pi = self.network(self.rollouts.obs[step])
 
@@ -94,8 +97,9 @@ class A2CAgent(BaseAgent):
                 states, rewards, dones, infos = self.envs.step(actions)
                 self.total_steps += cfg.num_processes
                 rewards = self.reward_normalizer(rewards)
+                masks = 1.0 - dones
 
-                self.rollouts.masks[step + 1].copy_(1 - dones)
+                self.rollouts.masks[step + 1].copy_(masks)
                 self.rollouts.actions[step].copy_(actions)
                 self.rollouts.values[step].copy_(v)
                 self.rollouts.action_log_probs[step].copy_(action_log_probs)
@@ -109,28 +113,37 @@ class A2CAgent(BaseAgent):
             # Compute R and GAE
             v_next, _ = self.network(self.rollouts.obs[-1])
 
-            if cfg.use_gae:
-                self.rollouts.values[-1].copy_(v_next)
-                gae = 0
-                for step in reversed(range(cfg.nsteps)):
-                    delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[step + 1] - self.rollouts.values[step]
-                    gae = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * gae
-                    self.rollouts.returns[step].copy_(gae + self.rollouts.values[step])
+            self.rollouts.values[-1].copy_(v_next)
+            self.rollouts.returns[-1].copy_(v_next)
+            self.rollouts.gaes[-1].zero_()
 
-            else:
-                self.rollouts.returns[-1].copy_(v_next)
-                for step in reversed(range(cfg.nsteps)):
-                    self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step + 1] + self.rollouts.rewards[step]
+            for step in reversed(range(cfg.nsteps)):
+                self.rollouts.returns[step] = self.rollouts.returns[step + 1] * cfg.gamma * self.rollouts.masks[step + 1] + self.rollouts.rewards[step]
+                delta = self.rollouts.rewards[step] + cfg.gamma * self.rollouts.values[step + 1] * self.rollouts.masks[step + 1] - self.rollouts.values[step]
+                self.rollouts.gaes[step] = delta + cfg.gamma * cfg.gae_lambda * self.rollouts.masks[step + 1] * self.rollouts.gaes[step+1]
+
 
 
     def update(self):
         cfg = self.cfg
 
         vs, pis = self.network(self.rollouts.obs[:-1].view(-1, *self.envs.observation_space.shape))
-        dist = Categorical(logits=pis)
-        log_probs = dist.log_prob(self.rollouts.actions.view(-1)).unsqueeze(-1)
 
-        advs = self.rollouts.returns[:-1].view(-1, 1) - vs
+        if isinstance(self.envs.action_space, Discrete):
+            dist = Categorical(logits=pis)
+            log_probs = dist.log_prob(self.rollouts.actions.view(-1)).unsqueeze(-1)
+
+        elif isinstance(self.envs.action_space, Box):
+            dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
+            log_probs = dist.log_prob(self.rollouts.actions.view(-1, self.action_store_dim)).sum(dim=1, keepdim=True)
+        else:
+            raise NotImplementedError('No such action space')
+
+        if cfg.use_gae:
+            advs = self.rollouts.gaes[:-1].view(-1, 1) + self.rollouts.values.view(-1, 1) - vs
+        else:
+            advs = self.rollouts.returns[:-1].view(-1, 1) - vs
+
         value_loss = advs.pow(2).mean()
         policy_loss = (advs.detach() * log_probs).mean().neg()
         entropy = dist.entropy().mean()

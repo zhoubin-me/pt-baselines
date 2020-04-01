@@ -40,7 +40,11 @@ class PtRunningMeanStd(object):
 
     def update(self, x):
         batch_mean = torch.mean(x, dim=0)
-        batch_var = torch.var(x, dim=0)
+        if x.size(0) > 1:
+            batch_var = torch.var(x, dim=0)
+        else:
+            batch_var = torch.ones_like(self.var)
+
         batch_count = x.shape[0]
         self.update_from_moments(batch_mean, batch_var, batch_count)
 
@@ -86,9 +90,12 @@ class MeanStdNormalizer(BaseNormalizer):
         self.epsilon = epsilon
 
     def __call__(self, x):
-        # x = np.asarray(x)
         if self.rms is None:
-            self.rms = PtRunningMeanStd(shape=(1,) + x.shape[1:])
+            if isinstance(x, torch.Tensor):
+                self.rms = PtRunningMeanStd(shape=(1,) + x.shape[1:])
+            else:
+                self.rms = RunningMeanStd(shape=(1,) + x.shape[1:])
+
         if not self.read_only:
             self.rms.update(x)
         return ((x - self.rms.mean) / (self.rms.var + self.epsilon).sqrt()).clamp(-self.clip, self.clip)

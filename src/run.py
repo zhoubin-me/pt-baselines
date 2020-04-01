@@ -1,14 +1,18 @@
 import numpy as np
 import argparse
 from src.common.utils import random_seed, mkdir, set_thread
-from src.agents import A2CAgent, A3CAgent, PPOAgent, RainbowAgent, TRPOAgent
-from src.config import A2CConfig, A3CConfig, PPOConfig, RainbowConfig, TRPOConfig
+from src.agents import *
+from src.config import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
     parser.add_argument('algo', type=str, choices=['Rainbow', 'A2C', 'A3C', 'PPO', 'TRPO'])
+    parser.add_argument('env_type', type=str, choices=['atari', 'mujoco'])
     args = parser.parse_known_args()
-    cfg = eval(f'{args[0].algo}Config')
+    if args[0].env_type == 'atari':
+        cfg = eval(f'{args[0].algo}Config')
+    else:
+        cfg = eval(f'{args[0].algo}RobotConfig')
 
     for k, v in cfg.__dict__.items():
         if not k.startswith('_'):

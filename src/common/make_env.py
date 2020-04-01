@@ -3,7 +3,7 @@ import pybullet_envs
 from gym import wrappers
 from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv, TimeLimit
 from src.common.monitor import Monitor
-from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack
+from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack, DummyVecEnv
 
 def make_env(game, env_type, **kwargs):
     if env_type == 'atari':
@@ -17,7 +17,7 @@ def make_robot_env(game,
                    log_prefix,
                    record_video=False,
                    seed=1234,
-                   allow_early_resets=True, **kwargs):
+                   allow_early_resets=False, **kwargs):
     def trunk():
         env = gym.make(f"{game}BulletEnv-v0")
         env.seed(seed)
@@ -70,7 +70,10 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, 
         for i in range(num_processes)
     ]
 
-    envs = ShmemVecEnv(envs, context='fork')
+    if num_processes > 1:
+        envs = ShmemVecEnv(envs, context='fork')
+    else:
+        envs = DummyVecEnv(envs)
     envs = VecPyTorch(envs)
     if env_type == 'atari':
         envs = VecPyTorchFrameStack(envs, 4)
