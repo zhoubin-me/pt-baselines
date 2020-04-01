@@ -175,8 +175,8 @@ class A2CAgent(BaseAgent):
                 else:
                     raise NotImplementedError('No such action space')
 
-                value_loss = 0.5 * (vs - return_batch).pow(2).mean()
-                policy_loss = (adv_batch.detach() * log_probs).mean().neg()
+                value_loss = (return_batch + adv_batch - vs).pow(2).mean()
+                policy_loss = ((return_batch + adv_batch - vs).detach() * log_probs).mean().neg()
                 loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
                 self.optimizer.zero_grad()
