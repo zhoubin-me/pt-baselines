@@ -2,7 +2,7 @@ import torch
 from torch.distributions import Categorical, Normal
 from gym.spaces import Box, Discrete
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-
+import numpy as np
 import time
 from collections import namedtuple
 
@@ -20,6 +20,7 @@ class A2CAgent(BaseAgent):
         super(A2CAgent, self).__init__(cfg)
 
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
+        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type, is_test=True)
 
         if cfg.env_type == 'atari':
             NET = SepBodyConv if cfg.sep_body else ConvNet
@@ -65,6 +66,17 @@ class A2CAgent(BaseAgent):
 
         self.total_steps = 0
 
+    def eval_step(self, states):
+        v, pi = self.network(self.state_normalizer(states))
+        if isinstance(self.envs.action_space, Discrete):
+            dist = Categorical(logits=pi)
+            actions = dist.sample()
+        elif isinstance(self.envs.action_space, Box):
+            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
+            actions = dist.sample()
+        else:
+            raise NotImplementedError('No such action space')
+        return actions
 
     def step(self):
         cfg = self.cfg
@@ -80,7 +92,6 @@ class A2CAgent(BaseAgent):
                         self.lr_scheduler.step()
                     self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
                     self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
-
 
                 v, pi = self.network(self.rollouts.obs[step])
 
@@ -174,7 +185,7 @@ class A2CAgent(BaseAgent):
                 else:
                     raise NotImplementedError('No such action space')
 
-                value_loss = (return_batch + adv_batch - vs).pow(2).mean()
+                value_loss = (return_batch + adv_batch - vs).pow(2).mean() * 0.5
                 policy_loss = ((return_batch + adv_batch - vs).detach() * log_probs).mean().neg()
                 loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
@@ -217,6 +228,20 @@ class A2CAgent(BaseAgent):
                 logger.log_tabular('RemHrs', (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
+
+            if self.total_steps % cfg.eval_interval == 0:
+                test_returns = self.eval_episodes()
+                logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
+                test_tabular = {
+                    "Epoch": self.total_steps // cfg.eval_interval,
+                    "Steps": self.total_steps,
+                    "NumOfEp": len(test_returns),
+                    "AverageTestEpRet": np.mean(test_returns),
+                    "StdTestEpRet": np.std(test_returns),
+                    "MaxTestEpRet": np.max(test_returns),
+                    "MinTestEpRet": np.min(test_returns)}
+                logger.dump_test(test_tabular)
+
 
             epoch = self.total_steps // self.cfg.save_interval
             if epoch > last_epoch:
