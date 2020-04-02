@@ -67,7 +67,7 @@ class A2CAgent(BaseAgent):
         self.total_steps = 0
 
     def eval_step(self, state):
-        states = torch.from_numpy(state).unsqueeze(0).float().cuda()
+        states = torch.from_numpy(np.array(state)).unsqueeze(0).float().cuda()
         v, pi = self.network(self.state_normalizer(states))
         if isinstance(self.envs.action_space, Discrete):
             dist = Categorical(logits=pi * 10)
