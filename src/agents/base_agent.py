@@ -37,17 +37,17 @@ class BaseAgent:
         while True:
             action = self.eval_step(state)
             state, reward, done, info = env.step(action)
-            if isinstance(info, dict):
-                if 'episode' in info:
-                    ret = info['episode']['r']
-                    break
+            if 'episode' in info:
+                ret = info['episode']['r']
+                break
         return ret
 
     def eval_episodes(self):
         episodic_returns = []
         self.network.eval()
         for ep in range(self.cfg.eval_episodes):
-            total_rewards = self.eval_episode()
+            with torch.no_grad():
+                total_rewards = self.eval_episode()
             episodic_returns.append(np.sum(total_rewards))
         self.network.train()
         return episodic_returns

@@ -17,21 +17,21 @@ def make_env(game, env_type, **kwargs):
     else:
         raise NotImplementedError("Please implement yourself")
 
-def make_bullet_env(game, log_prefix, seed=1234, is_test=False, **kwargs):
+def make_bullet_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
     def trunk():
         env = gym.make(f"{game}BulletEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        # env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if record_video else env
         return env
     return trunk
 
-def make_mujoco_env(game, log_prefix, seed=1234, is_test=False, **kwargs):
+def make_mujoco_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
     def trunk():
         env = gym.make(f"{game}MuJoCoEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        # env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if record_video else env
         return env
     return trunk
 
@@ -39,7 +39,7 @@ def make_mujoco_env(game, log_prefix, seed=1234, is_test=False, **kwargs):
 def make_atari_env(game,
                    log_prefix,
                    seed=1234,
-                   is_test=False,
+                   record_video=False,
                    frame_stack=True,
                    episode_life=True,
                    transpose_image=True,
@@ -50,28 +50,28 @@ def make_atari_env(game,
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=allow_early_resets)
         env = wrap_deepmind(env, episode_life=episode_life, clip_rewards=clip_rewards, frame_stack=frame_stack, transpose_image=transpose_image)
-        # env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if record_video else env
         return env
     return trunk
 
 
-def make_a3c_env(game, log_prefix, is_test=False, seed=1234):
+def make_a3c_env(game, log_prefix, record_video=False, seed=1234):
     def trunk():
         env = gym.make(f'{game}Deterministic-v4')
         env.seed(seed)
         env = AtariRescale42x42(env)
         env = NormalizedEnv(env)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if is_test else env
+        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if record_video else env
         return env
     return trunk
 
 
-def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, env_type='atari', is_test=False):
+def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, env_type='atari', record_video=False, **kwargs):
 
     envs = [
-        make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}' if not is_test else f'{log_dir}/test_',
-                 seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets)
+        make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}',
+                 seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets, **kwargs)
         for i in range(num_processes)
     ]
 

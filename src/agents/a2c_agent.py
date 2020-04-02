@@ -7,7 +7,7 @@ import time
 from collections import namedtuple
 
 from .base_agent import BaseAgent
-from src.common.make_env import make_vec_envs
+from src.common.make_env import make_env, make_vec_envs
 from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
@@ -20,7 +20,7 @@ class A2CAgent(BaseAgent):
         super(A2CAgent, self).__init__(cfg)
 
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
-        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type, is_test=True)
+        self.test_env = make_env(cfg.game, cfg.env_type, seed=cfg.seed, log_prefix=f'{cfg.log_dir}/test', allow_early_resets=False)()
 
         if cfg.env_type == 'atari':
             NET = SepBodyConv if cfg.sep_body else ConvNet
@@ -66,17 +66,20 @@ class A2CAgent(BaseAgent):
 
         self.total_steps = 0
 
-    def eval_step(self, states):
+    def eval_step(self, state):
+        states = torch.from_numpy(state).unsqueeze(0).float().cuda()
         v, pi = self.network(self.state_normalizer(states))
         if isinstance(self.envs.action_space, Discrete):
-            dist = Categorical(logits=pi)
-            actions = dist.sample()
+            dist = Categorical(logits=pi * 10)
+            action = dist.sample()
+            action = action.squeeze().item()
         elif isinstance(self.envs.action_space, Box):
-            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
-            actions = dist.sample()
+            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp() * 0.1)
+            action = dist.sample()
+            action = action.squeeze().cpu().numpy()
         else:
             raise NotImplementedError('No such action space')
-        return actions
+        return action
 
     def step(self):
         cfg = self.cfg
@@ -210,7 +213,7 @@ class A2CAgent(BaseAgent):
         logger = self.logger
         logger.store(TrainEpRet=0, Loss=0, VLoss=0, PLoss=0, Entropy=0)
         t0 = time.time()
-        last_epoch = 1
+        last_epoch = -1
 
         while self.total_steps < cfg.max_steps:
             self.step()

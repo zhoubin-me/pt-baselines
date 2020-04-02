@@ -68,8 +68,8 @@ class RainbowAgent(BaseAgent):
         self.actor = RainbowActor(cfg, self.lock)
         self.test_env = make_atari_env(
             game=cfg.game,
-            log_prefix=cfg.log_dir,
-            is_test=True,
+            log_prefix=f'{cfg.log_dir}/test',
+            record_video=False,
             episode_life=False,
             seed=cfg.seed
         )()

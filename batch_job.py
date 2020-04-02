@@ -8,7 +8,7 @@ N = torch.cuda.device_count()
 cfgs = glob.glob('src/configs/*.py')
 
 for cfg in cfgs:
-    if 'ppo_' in cfg or 'a2c_' in cfg:
+    if 'trpo' in cfg and 'mujoco' in cfg:
         pass
     else:
         continue
