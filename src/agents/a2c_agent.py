@@ -72,11 +72,11 @@ class A2CAgent(BaseAgent):
         if isinstance(self.envs.action_space, Discrete):
             dist = Categorical(logits=pi * 10)
             action = dist.sample()
-            action = action.squeeze().item()
+            action = action.squeeze(0).item()
         elif isinstance(self.envs.action_space, Box):
             dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp() * 0.1)
             action = dist.sample()
-            action = action.squeeze().cpu().numpy()
+            action = action.squeeze(0).cpu().numpy()
         else:
             raise NotImplementedError('No such action space')
         return action
