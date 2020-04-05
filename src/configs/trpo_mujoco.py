@@ -18,7 +18,7 @@ class Config:
     log_interval = mini_steps * num_processes
     eval_episodes = 10
     save_interval = int(1e5)
-    use_lr_decay = False
+    use_lr_decay = True
 
     # Optimizer related
     optimizer = 'adam'
@@ -33,6 +33,7 @@ class Config:
     accept_ratio = 0.1
     max_backtracks = 10
     residual_tol = 1e-10
+    fisher_frac = 0.125
 
     # Loss related
     l2_reg = 1e-3

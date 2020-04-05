@@ -10,7 +10,7 @@ from .base_agent import BaseAgent
 from src.common.make_env import make_env, make_vec_envs
 from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv
 from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer, ImageNormalizer
+from src.common.normalizer import SignNormalizer, ImageNormalizer, MeanStdNormalizer
 from src.common.utils import tensor
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
@@ -147,11 +147,11 @@ class A2CAgent(BaseAgent):
                 rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]) * rollouts.badmasks[step + 1]
 
 
-    def sample(self):
+    def sample(self, mini_batch_size=None):
         cfg = self.cfg
         rollouts = self.rollouts
         batch_size = cfg.num_processes * cfg.mini_steps
-        mini_batch_size = batch_size // cfg.num_mini_batch
+        mini_batch_size = batch_size // cfg.num_mini_batch if mini_batch_size is None else mini_batch_size
 
         gaes = rollouts.gaes[:-1].view(-1, 1)
         advs = (gaes - gaes.mean()) / (gaes.std() + 1e-5)
@@ -188,8 +188,8 @@ class A2CAgent(BaseAgent):
                 else:
                     raise NotImplementedError('No such action space')
 
-                value_loss = (return_batch + adv_batch - vs).pow(2).mean() * 0.5
-                policy_loss = ((return_batch + adv_batch - vs).detach() * log_probs).mean().neg()
+                value_loss = (value_batch + adv_batch - vs).pow(2).mean() * 0.5
+                policy_loss = (adv_batch.detach() * log_probs).mean().neg()
                 loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
                 self.optimizer.zero_grad()
@@ -205,8 +205,7 @@ class A2CAgent(BaseAgent):
                 }
 
                 self.logger.store(**kwargs)
-                if self.lr_scheduler is not None:
-                    self.lr_scheduler.step()
+
 
     def run(self):
         cfg = self.cfg
@@ -236,13 +235,13 @@ class A2CAgent(BaseAgent):
             if epoch > last_epoch:
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 last_epoch = epoch
-                test_returns = self.eval_episodes()
-                test_tabular = {
-                    "Epoch": self.total_steps // cfg.save_interval,
-                    "Steps": self.total_steps,
-                    "NumOfEp": len(test_returns),
-                    "AverageTestEpRet": np.mean(test_returns),
-                    "StdTestEpRet": np.std(test_returns),
-                    "MaxTestEpRet": np.max(test_returns),
-                    "MinTestEpRet": np.min(test_returns)}
-                logger.dump_test(test_tabular)
+                # test_returns = self.eval_episodes()
+                # test_tabular = {
+                #     "Epoch": self.total_steps // cfg.save_interval,
+                #     "Steps": self.total_steps,
+                #     "NumOfEp": len(test_returns),
+                #     "AverageTestEpRet": np.mean(test_returns),
+                #     "StdTestEpRet": np.std(test_returns),
+                #     "MaxTestEpRet": np.max(test_returns),
+                #     "MinTestEpRet": np.min(test_returns)}
+                # logger.dump_test(test_tabular)
