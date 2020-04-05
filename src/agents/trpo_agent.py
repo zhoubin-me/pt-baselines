@@ -69,6 +69,20 @@ class TRPOAgent(A2CAgent):
             raise NotImplementedError("KL not implemented")
         return kl
 
+    def pdist(self, pis, action_batch):
+        if isinstance(self.envs.action_space, Discrete):
+            pdist = Categorical(logits=pis)
+            log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1)
+            entropy = pdist.entropy().mean()
+        elif isinstance(self.envs.action_space, Box):
+            pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
+            log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True)
+            entropy = pdist.entropy().sum(-1).mean()
+        else:
+            raise NotImplementedError('No such action space')
+
+        return pdist, log_prob, entropy
+
     def update(self):
         cfg = self.cfg
         # Value Step
@@ -84,24 +98,15 @@ class TRPOAgent(A2CAgent):
                 value_loss.backward()
                 self.optimizer.step()
 
-        # Policy Update
+        # Policy Step
         sampler = self.sample(cfg.num_processes * cfg.mini_steps)
         for batch_data in sampler:
             obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
 
             vs, pis = self.network(obs_batch)
-            if isinstance(self.envs.action_space, Discrete):
-                pdist = Categorical(logits=pis)
-                log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1)
-                entropy = pdist.entropy().mean()
-                kl = self.KL(pdist)
-            elif isinstance(self.envs.action_space, Box):
-                pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-                log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True)
-                entropy = pdist.entropy().sum(-1).mean()
-                kl = self.KL(pdist)
-            else:
-                raise NotImplementedError('No such action space')
+
+            pdist, log_prob, entropy = self.pdist(pis, action_batch)
+            kl = self.KL(pdist)
 
             policy_loss_neg = (adv_batch * (log_prob - action_log_prob_batch).exp()).mean()
             grads = torch.autograd.grad(policy_loss_neg, self.network.get_policy_params(), retain_graph=True)
@@ -113,7 +118,8 @@ class TRPOAgent(A2CAgent):
             def fisher_product(x, cg_damping=cfg.cg_damping):
                 z = g @ x
                 hv = torch.autograd.grad(z, self.network.get_policy_params(), retain_graph=True)
-                return torch.cat([v.contiguous().view(-1) for v in hv]).detach() * x * cg_damping
+                return torch.cat([v.contiguous().view(-1) for v in hv]).detach() + x * cg_damping
+
 
             step = self.conjugate_gradients(fisher_product, grads, cfg.cg_iters)
 
@@ -130,8 +136,7 @@ class TRPOAgent(A2CAgent):
                     vector_to_parameters(params_new, self.network.get_policy_params())
                     pis_new = self.network.p(obs_batch)
 
-                    pdist_new = Normal(pis_new, self.network.p_log_std.expand_as(pis).exp())
-                    log_prob_new = pdist_new.log_prob(action_batch).sum(-1, keepdim=True)
+                    pdist_new, log_prob_new, _ = self.pdist(pis_new, action_batch)
                     policy_loss_neg_new = (adv_batch * (log_prob_new - action_log_prob_batch).exp()).mean()
                     kl_new = self.KL(pdist, pdist_new)
 
@@ -152,4 +157,3 @@ class TRPOAgent(A2CAgent):
             }
 
             self.logger.store(**kwargs)
-
