@@ -113,7 +113,10 @@ class TRPOAgent(A2CAgent):
             def fisher_product(x, cg_damping=cfg.cg_damping):
                 z = g @ x
                 hv = torch.autograd.grad(z, self.network.get_policy_params(), retain_graph=True)
-                return torch.cat([v.contiguous().view(-1) for v in hv]).detach() * x * cg_damping
+                return torch.cat([v.contiguous().view(-1) for v in hv]).detach() + x * cg_damping
+
+            # import ipdb
+            # ipdb.set_trace()
 
             step = self.conjugate_gradients(fisher_product, grads, cfg.cg_iters)
 
@@ -123,7 +126,7 @@ class TRPOAgent(A2CAgent):
             with torch.no_grad():
                 value_loss = (vs - value_batch - gae_batch).pow(2).mean()
                 params_old = parameters_to_vector(self.network.get_policy_params())
-                expected_improve = grads & max_trpo_step
+                expected_improve = grads @ max_trpo_step
 
                 def backtrac_fn(s):
                     params_new = params_old + s

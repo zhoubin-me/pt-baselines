@@ -5,8 +5,8 @@ class Config:
     game = "Reacher"
     algo = "TRPO"
     env_type = 'mujoco'
-    sep_body = True
     seed = 0
+    sep_body = True
 
     # Training related
     num_processes = 1
@@ -19,6 +19,7 @@ class Config:
     eval_episodes = 10
     save_interval = int(1e5)
     use_lr_decay = True
+
 
     # Optimizer related
     optimizer = 'adam'
@@ -34,14 +35,15 @@ class Config:
     accept_ratio = 0.1
     max_backtracks = 10
     residual_tol = 1e-10
-    fisher_frac = 0.125
+    l2_reg = 1e-3
 
     # Loss related
-    gae_lambda = 0.97
-    entropy_coef = 0.0
+    gae_lambda = 0.95
+    entropy_coef = 0
     value_loss_coef = 0.5
     max_grad_norm = 0.5
     clip_param = 0.1
+
 
     # Others
     ckpt = ""
