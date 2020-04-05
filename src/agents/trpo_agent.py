@@ -81,7 +81,7 @@ class TRPOAgent(A2CAgent):
         else:
             raise NotImplementedError('No such action space')
 
-        return pdist, log_prob
+        return pdist, log_prob, entropy
 
     def update(self):
         cfg = self.cfg
@@ -105,7 +105,7 @@ class TRPOAgent(A2CAgent):
 
             vs, pis = self.network(obs_batch)
 
-            pdist, log_prob = self.pdist(pis, action_batch)
+            pdist, log_prob, entropy = self.pdist(pis, action_batch)
             kl = self.KL(pdist)
 
             policy_loss_neg = (adv_batch * (log_prob - action_log_prob_batch).exp()).mean()
@@ -136,7 +136,7 @@ class TRPOAgent(A2CAgent):
                     vector_to_parameters(params_new, self.network.get_policy_params())
                     pis_new = self.network.p(obs_batch)
 
-                    pdist_new, log_prob_new = self.pdist(pis_new, action_batch)
+                    pdist_new, log_prob_new, _ = self.pdist(pis_new, action_batch)
                     policy_loss_neg_new = (adv_batch * (log_prob_new - action_log_prob_batch).exp()).mean()
                     kl_new = self.KL(pdist, pdist_new)
 
