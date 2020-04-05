@@ -19,6 +19,4 @@ for cfg in cfgs:
             os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1')
     elif 'mujoco' in cfg:
         for i, game in enumerate(_mujoco8):
-            if not 'Inverted' in game:
-                continue
             os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1')
