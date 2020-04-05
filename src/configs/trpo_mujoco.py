@@ -39,7 +39,6 @@ class Config:
     # Loss related
     gae_lambda = 0.97
     entropy_coef = 0.0
-    value_loss_coef = 0.5
     max_grad_norm = 0.5
     clip_param = 0.1
 
