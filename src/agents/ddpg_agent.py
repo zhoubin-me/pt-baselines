@@ -26,6 +26,7 @@ class DDPGActor(AsyncActor):
         cfg = self.cfg
         self._device = torch.device(f'cuda:{self.device_id}') if self.device_id >= 0 else torch.device('cpu')
         self._env = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
+        self._action_high = self._env.action_space.high[0]
 
     def _transition(self):
         if self._state is None:
@@ -39,6 +40,7 @@ class DDPGActor(AsyncActor):
             pi = self._network.p(state)
             dist = Normal(pi, self._network.p_log_std.expand_as(pi).exp())
             action = dist.sample()
+            action = action.clamp(-self._action_high, self._action_high)
             action = action.squeeze(0).cpu().numpy()
 
         next_state, reward, done, info = self._env.step(action)

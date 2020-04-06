@@ -34,6 +34,11 @@ class A2CAgent(BaseAgent):
         else:
             NET = ConvNet if len(self.envs.observation_space.shape) == 3 else MLPNet
 
+        if isinstance(self.test_env.action_space, Box):
+            self.action_high = self.test_env.action_space.high[0]
+        else:
+            self.action_high = None
+
         if len(self.envs.observation_space.shape) == 3:
             self.network = NET(4, self.envs.action_space.n).to(self.device)
             self.reward_normalizer = SignNormalizer()
@@ -97,6 +102,7 @@ class A2CAgent(BaseAgent):
         elif isinstance(self.envs.action_space, Box):
             dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
             actions = dist.sample()
+            actions = actions.clamp(-self.action_high, self.action_high)
             action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
         else:
             raise NotImplementedError('No such action space')
