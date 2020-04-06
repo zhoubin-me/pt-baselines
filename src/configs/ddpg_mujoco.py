@@ -1,6 +1,6 @@
 
 class Config:
-    game = "Reacher2D"
+    game = "Reacher"
     algo = 'DDPG'
     seed = 0
     device_id = 0
@@ -8,6 +8,10 @@ class Config:
 
     # Trainng related
     max_steps = int(1e6)
+    start_timesteps = 25000
+    batch_size = 256
+    buffer_size = int(1e6)
+
     log_interval = 1e4
     eval_episodes = 10
     save_interval = int(1e5)
@@ -25,6 +29,7 @@ class Config:
     tau = 0.005
 
     # Others
+    norm_env = False
     ckpt = ""
     log_dir = ""
     play = False

@@ -8,7 +8,7 @@ from collections import deque
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.common.utils import close_obj
+from src.common.utils import close_obj, tensor
 from src.common.make_env import make_atari_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
@@ -128,7 +128,7 @@ class RainbowAgent(BaseAgent):
 
     def eval_step(self):
         if np.random.rand() > self.cfg.test_epsilon:
-            state = self.state_normalizer(torch.from_numpy(self.test_state).float().to(self.device))
+            state = self.state_normalizer(tensor(self.test_state).float().to(self.device)).unsqueeze(0)
             prob, _ = self.network(state)
             q = (prob * self.atoms).sum(-1)
             action = np.argmax(q.tolist())

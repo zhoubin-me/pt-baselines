@@ -32,6 +32,7 @@ class Config:
     max_grad_norm = 0.5
 
     # Others
+    norm_env = False
     ckpt = ""
     log_dir = ""
     play = False

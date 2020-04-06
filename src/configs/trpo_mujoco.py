@@ -42,6 +42,7 @@ class Config:
     clip_param = 0.1
 
     # Others
+    norm_env = True
     ckpt = ""
     log_dir = ""
     play = False

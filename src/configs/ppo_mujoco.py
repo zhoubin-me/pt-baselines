@@ -37,6 +37,7 @@ class Config:
 
 
     # Others
+    norm_env = True
     ckpt = ""
     log_dir = ""
     play = False

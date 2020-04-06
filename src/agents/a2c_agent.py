@@ -22,9 +22,10 @@ class A2CAgent(BaseAgent):
         super(A2CAgent, self).__init__(cfg)
 
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, device=self.device)
-        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
-        share_rms(self.envs, self.test_env)
+        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', device=self.device, norm_env=cfg.norm_env)
+        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', device=self.device, norm_env=cfg.norm_env)
+        if cfg.norm_env:
+            share_rms(self.envs, self.test_env)
 
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
@@ -81,15 +82,8 @@ class A2CAgent(BaseAgent):
 
 
     def eval_step(self):
-        v, pi = self.network(self.state_normalizer(self.test_state))
-        if isinstance(self.envs.action_space, Discrete):
-            dist = Categorical(logits=pi)
-            action = dist.sample()
-        elif isinstance(self.envs.action_space, Box):
-            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
-            action = dist.sample()
-        else:
-            raise NotImplementedError('No such action space')
+        _, pi = self.network(self.state_normalizer(self.test_state))
+        action, _ = self.act(pi)
         return action
 
     def act(self, pis):

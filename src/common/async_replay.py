@@ -41,7 +41,7 @@ class AsyncReplayBuffer(mp.Process):
 
         def set_up_cache():
             batch_data = replay.sample(self.batch_size, beta=self.beta0)
-            batch_data = [torch.tensor(x, device=device) for x in batch_data]
+            batch_data = [torch.tensor(x).to(device) for x in batch_data]
             for i in range(self.cache_len):
                 cache.append([x.clone() for x in batch_data])
                 for x in cache[i]: x.share_memory_()

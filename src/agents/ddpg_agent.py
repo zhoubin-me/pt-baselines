@@ -3,11 +3,15 @@ import torch.nn.functional as F
 from copy import deepcopy
 from .a2c_agent import A2CAgent
 from src.common.async_replay import AsyncReplayBuffer
-
+from src.common.make_env import make_bullet_env
+from src.common.utils import tensor
 
 class DDPGAgent(A2CAgent):
     def __init__(self, cfg):
         super(DDPGAgent, self).__init__(cfg)
+
+        self.envs = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
+        self.test_env = make_bullet_env(cfg.game, cfg.log_dir + '/test', seed=cfg.seed+1)()
 
         self.target_network = deepcopy(self.network)
         self.actor_optimizer = torch.optim.Adam(self.network.get_policy_params(), lr=cfg.p_lr)
@@ -23,17 +27,26 @@ class DDPGAgent(A2CAgent):
         if self.total_steps < self.cfg.start_timesteps:
             action = self.envs.action_space.sample()
         else:
-            action, _ = self.act(self.network.p(self.state_normalizer(self.train_state)))
+            state = tensor(self.train_state).float().to(self.device).unsqueeze(0)
+            pi = self.network.p(self.state_normalizer(state))
+            action, _ = self.act(pi)
+            action = action.squeeze(0).cpu().numpy()
 
-        next_state, reward, done, infos = self.envs.step(action)
+
+        next_state, reward, done, info = self.envs.step(action)
         self.rollouts.add([self.train_state, action, reward, next_state, done])
         self.train_state = next_state
         self.total_steps += 1
 
-        for info in infos:
-            if 'episode' in info:
-                self.logger.store(TrainEpRet=info['episode']['r'])
+        if 'episode' in info:
+            self.train_state = self.envs.reset()
+            self.logger.store(TrainEpRet=info['episode']['r'])
 
+    def eval_step(self):
+        state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
+        pi = self.network.p(self.state_normalizer(state))
+        action, _ = self.act(pi)
+        return action.squeeze(0).cpu().numpy()
 
     def update(self):
         if self.total_steps < self.cfg.start_timesteps:
@@ -66,11 +79,5 @@ class DDPGAgent(A2CAgent):
             'Entropy': None,
         }
         self.logger.store(**kwargs)
-
-
-
-
-
-
 
 
