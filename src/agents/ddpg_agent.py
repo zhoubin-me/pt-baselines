@@ -32,7 +32,7 @@ class DDPGActor(AsyncActor):
             self._state = self._env.reset()
 
 
-        if self._total_steps < self.cfg.start_timesteps:
+        if self._total_steps < self.cfg.exploration_steps:
             action = self._env.action_space.sample()
         else:
             state = tensor(self._state).float().to(self._device).unsqueeze(0)
@@ -61,7 +61,7 @@ class DDPGAgent(BaseAgent):
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.replay = AsyncReplayBuffer(
-            buffer_size=cfg.replay_size,
+            buffer_size=cfg.buffer_size,
             batch_size=cfg.batch_size,
             device_id=cfg.device_id
         )
@@ -86,7 +86,7 @@ class DDPGAgent(BaseAgent):
 
     def eval_step(self):
         state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
-        pi = self.network.p(self.state_normalizer(state))
+        pi = self.network.p(state)
         dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
         action = dist.sample()
         return action.squeeze(0).cpu().numpy()
@@ -107,14 +107,15 @@ class DDPGAgent(BaseAgent):
 
 
         ## Upate
-        if self.total_steps > cfg.start_timesteps:
+        if self.total_steps > cfg.exploration_steps:
             experiences = self.replay.sample()
             states, actions, rewards, next_states, terminals = experiences
             states = states.float()
             next_states = next_states.float()
-            actions = actions.long()
+            actions = actions.float()
+            terminals = terminals.float().view(-1, 1)
+            rewards = rewards.float().view(-1, 1)
 
-            cfg = self.cfg
 
             target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
@@ -168,7 +169,7 @@ class DDPGAgent(BaseAgent):
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 test_returns = self.eval_episodes()
                 test_tabular = {
-                    "Epoch": self.total_steps // cfg.eval_interval,
+                    "Epoch": self.total_steps // cfg.save_interval,
                     "Steps": self.total_steps,
                     "NumOfEp": len(test_returns),
                     "AverageTestEpRet": np.mean(test_returns),

@@ -8,7 +8,8 @@ class Config:
 
     # Trainng related
     max_steps = int(1e6)
-    start_timesteps = 25000
+    exploration_steps = 25000
+    sgd_update_frequency = 1
     batch_size = 256
     buffer_size = int(1e6)
 

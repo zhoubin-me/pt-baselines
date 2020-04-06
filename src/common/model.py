@@ -19,7 +19,7 @@ class DDPGMLP(nn.Module):
 
         self.v = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
-            nn.Linear(64, 64 + action_dim), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
         )
 
         self.v_head = nn.Linear(64 + action_dim, 1)
@@ -39,7 +39,7 @@ class DDPGMLP(nn.Module):
 
     def action_value(self, state, action):
         v_feat = self.v(state)
-        return self.v_head(torch.cat([v_feat, action], dim=0))
+        return self.v_head(torch.cat([v_feat, action], dim=1))
 
     def get_policy_params(self):
         return chain(self.p.parameters(), iter([self.p_log_std]))
