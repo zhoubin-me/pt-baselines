@@ -3,7 +3,6 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     game = 'Pong'
-    env_type = 'atari'
     algo = 'A3C'
     seed = 0
 

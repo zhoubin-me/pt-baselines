@@ -15,7 +15,6 @@ seed = 4
 def run_single_config(queue):
     while True:
         config_path, game = queue.get()
-
         try:
             main(cfg=config_path, game=game, seed=seed)
         except Exception as e:

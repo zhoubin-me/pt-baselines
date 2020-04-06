@@ -4,7 +4,6 @@ from dataclasses import dataclass
 class Config:
     game = 'Breakout'
     algo = 'Rainbow'
-    env_type = 'atari'
     seed = 0
     device_id = 0
 

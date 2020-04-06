@@ -6,14 +6,12 @@ from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42
 from src.common.monitor import Monitor
 from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack, DummyVecEnv, VecNormalize
 from src.common.utils import mkdir
+from src.common.bench import _atari63, _mujoco7
 
-def make_env(game, env_type, **kwargs):
-    if env_type == 'atari':
+def make_env(game, **kwargs):
+    if game in _atari63:
         return make_atari_env(game, **kwargs)
-    elif env_type == 'mujoco' or 'bullet':
-        return make_bullet_env(game, **kwargs)
-        # return make_mujoco_env(game, **kwargs)
-    elif env_type == 'bullet':
+    elif game in _mujoco7:
         return make_bullet_env(game, **kwargs)
     else:
         raise NotImplementedError("Please implement yourself")
@@ -26,16 +24,6 @@ def make_bullet_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
         env = wrappers.Monitor(env, log_prefix, force=True) if record_video else env
         return env
     return trunk
-
-def make_mujoco_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
-    def trunk():
-        env = gym.make(f"{game}MuJoCoEnv-v0")
-        env.seed(seed)
-        env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrappers.Monitor(env, log_prefix, force=True) if record_video else env
-        return env
-    return trunk
-
 
 def make_atari_env(game,
                    log_prefix,
@@ -72,7 +60,7 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, 
 
     mkdir(log_dir)
     envs = [
-        make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}',
+        make_env(game, log_prefix=f'{log_dir}/rank_{i}',
                  seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets, **kwargs)
         for i in range(num_processes)
     ]

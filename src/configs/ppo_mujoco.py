@@ -4,9 +4,7 @@ from dataclasses import dataclass
 class Config:
     game = "Reacher"
     algo = "PPO"
-    env_type = 'mujoco'
     seed = 0
-    sep_body = False
     device_id = -1
 
     # Training related
