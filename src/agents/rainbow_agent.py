@@ -8,7 +8,7 @@ from collections import deque
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.common.utils import close_obj, tensor
+from src.common.utils import close_obj
 from src.common.make_env import make_atari_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
@@ -16,14 +16,16 @@ from src.common.logger import EpochLogger
 from src.common.model import C51Net
 
 class RainbowActor(AsyncActor):
-    def __init__(self, cfg, lock):
+    def __init__(self, cfg, lock, device_id):
         super(RainbowActor, self).__init__(cfg)
         self.lock = lock
+        self.device_id = device_id
         self.start()
 
     def _set_up(self):
         cfg = self.cfg
-        self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
+        self._device = torch.device(f'cuda:{self.device_id}') if self.device_id >= 0 else torch.device('cpu')
+        self._atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).to(self._device)
 
         self._env = make_atari_env(
             game=cfg.game,
@@ -43,7 +45,7 @@ class RainbowActor(AsyncActor):
         cfg = self.cfg
 
         if  cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
-            state = torch.from_numpy(self._state_normalizer([self._state])).float().cuda()
+            state = torch.from_numpy(self._state_normalizer([self._state])).float().to(self._device)
             with torch.no_grad():
                 probs, _ = self._network(state)
             action = (probs * self._atoms).sum(-1).argmax(dim=-1)
@@ -65,7 +67,8 @@ class RainbowAgent(BaseAgent):
     def __init__(self, cfg):
         super(RainbowAgent, self).__init__(cfg)
         self.lock = mp.Lock()
-        self.actor = RainbowActor(cfg, self.lock)
+        self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
+        self.actor = RainbowActor(cfg, self.lock, cfg.device_id)
         self.test_env = make_atari_env(
             game=cfg.game,
             log_prefix=f'{cfg.log_dir}/test',
@@ -80,7 +83,8 @@ class RainbowAgent(BaseAgent):
             batch_size=cfg.batch_size,
             prioritize=cfg.prioritize,
             alpha=cfg.replay_alpha,
-            beta0=cfg.replay_beta0
+            beta0=cfg.replay_beta0,
+            device_id=cfg.device_id
         )
 
         self.beta_schedule = LinearSchedule(cfg.replay_beta0, 1.0, cfg.max_steps)
@@ -91,7 +95,7 @@ class RainbowAgent(BaseAgent):
             noisy=cfg.noisy,
             duel=cfg.dueling,
             in_channels=cfg.history_length
-        ).cuda()
+        ).to(self.device)
 
         self.network.train()
         self.network.share_memory()
@@ -110,8 +114,8 @@ class RainbowAgent(BaseAgent):
         )
 
         self.tracker = deque(maxlen=cfg.nstep)
-        self.batch_indices = torch.arange(cfg.batch_size).cuda()
-        self.atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).cuda()
+        self.batch_indices = torch.arange(cfg.batch_size).to(self.device)
+        self.atoms = torch.linspace(cfg.v_min, cfg.v_max, cfg.num_atoms).to(self.device)
         self.delta_atom = (cfg.v_max - cfg.v_min) / (cfg.num_atoms - 1)
 
         self.state_normalizer = ImageNormalizer()
@@ -122,16 +126,14 @@ class RainbowAgent(BaseAgent):
         close_obj(self.replay)
         close_obj(self.actor)
 
-    def eval_step(self, state):
-        self.state_normalizer.set_read_only()
+    def eval_step(self):
         if np.random.rand() > self.cfg.test_epsilon:
-            state = torch.from_numpy(self.state_normalizer([state])).float().cuda()
+            state = self.state_normalizer(torch.from_numpy(self.test_state).float().to(self.device))
             prob, _ = self.network(state)
             q = (prob * self.atoms).sum(-1)
             action = np.argmax(q.tolist())
         else:
             action = self.test_env.action_space.sample()
-        self.state_normalizer.unset_read_only()
         return action
 
     def step(self):
@@ -168,8 +170,8 @@ class RainbowAgent(BaseAgent):
             beta = self.beta_schedule(cfg.sgd_update_frequency)
             experiences = self.replay.sample(beta=beta)
             states, actions, rewards, next_states, terminals, *extras = experiences
-            states = self.state_normalizer(states)
-            next_states = self.state_normalizer(next_states)
+            states = self.state_normalizer(states.float())
+            next_states = self.state_normalizer(next_states.float())
             actions = actions.long()
 
 
@@ -182,8 +184,8 @@ class RainbowAgent(BaseAgent):
                     actions_next = prob_next.mul(self.atoms).sum(dim=-1).argmax(dim=-1)
                 prob_next = prob_next[self.batch_indices, actions_next, :]
 
-                rewards = tensor(rewards).unsqueeze(-1)
-                terminals = tensor(terminals).unsqueeze(-1)
+                rewards = rewards.float().unsqueeze(-1)
+                terminals = terminals.float().unsqueeze(-1)
                 atoms_next = rewards + (cfg.discount ** cfg.nstep) * (1 - terminals) * self.atoms.view(1, -1)
 
                 atoms_next.clamp_(cfg.v_min, cfg.v_max)
@@ -195,7 +197,7 @@ class RainbowAgent(BaseAgent):
 
                 target_prob = torch.zeros_like(prob_next)
                 offset = torch.linspace(0, ((cfg.batch_size - 1) * cfg.num_atoms), cfg.batch_size)
-                offset = offset.unsqueeze(1).expand(cfg.batch_size, cfg.num_atoms).long().cuda()
+                offset = offset.unsqueeze(1).expand(cfg.batch_size, cfg.num_atoms).long().to(self.device)
 
                 target_prob.view(-1).index_add_(0, (l + offset).view(-1), (prob_next * (u.float() - b)).view(-1))
                 target_prob.view(-1).index_add_(0, (u + offset).view(-1), (prob_next * (b - l.float())).view(-1))
@@ -209,7 +211,7 @@ class RainbowAgent(BaseAgent):
                 idxes = idxes.int().flatten().tolist()
                 prioritise = (error+1e-8).flatten().tolist()
                 self.replay.update_priorities(idxes, prioritise)
-                loss = (error * weights).mean()
+                loss = (error * weights.float()).mean()
             else:
                 loss = error.mean()
 
@@ -229,6 +231,7 @@ class RainbowAgent(BaseAgent):
 
         t0 = time.time()
         logger.store(TrainEpRet=0, Loss=0)
+        last_epoch = -1
 
         while self.total_steps < cfg.max_steps:
             self.step()
@@ -243,10 +246,11 @@ class RainbowAgent(BaseAgent):
                 t0 = time.time()
                 logger.dump_tabular(self.total_steps)
 
-            if self.total_steps % cfg.save_interval == 0:
+            epoch = self.total_steps // self.cfg.save_interval
+            if epoch > last_epoch:
+                last_epoch = epoch
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 test_returns = self.eval_episodes()
-                logger.add_scalar('AverageTestEpRet', np.mean(test_returns), self.total_steps)
                 test_tabular = {
                     "Epoch": self.total_steps // cfg.eval_interval,
                     "Steps": self.total_steps,

@@ -1,3 +1,4 @@
+import torch
 import torch.multiprocessing as mp
 
 from src.common.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
@@ -13,7 +14,7 @@ class AsyncReplayBuffer(mp.Process):
     FEED_BATCH = 3
     UPDATE = 4
 
-    def __init__(self, buffer_size, batch_size, prioritize=False, alpha=0.5, beta0=0.4):
+    def __init__(self, buffer_size, batch_size, prioritize=False, alpha=0.5, beta0=0.4, device_id=-1):
         mp.Process.__init__(self)
         self.pipe, self.worker_pipe = mp.Pipe()
         self.buffer_size = buffer_size
@@ -22,6 +23,7 @@ class AsyncReplayBuffer(mp.Process):
         self.alpha = alpha
         self.beta0 = beta0
         self.cache_len = 2
+        self.device_id = device_id
         self.start()
 
     def run(self):
@@ -32,13 +34,14 @@ class AsyncReplayBuffer(mp.Process):
 
         cache = []
         pending_batch = None
+        device = torch.device('cpu') if self.device_id < 0 else torch.device(f'cuda:{self.device_id}')
 
         first = True
         cur_cache = 0
 
         def set_up_cache():
             batch_data = replay.sample(self.batch_size, beta=self.beta0)
-            batch_data = [tensor(x) for x in batch_data]
+            batch_data = [torch.tensor(x, device=device) for x in batch_data]
             for i in range(self.cache_len):
                 cache.append([x.clone() for x in batch_data])
                 for x in cache[i]: x.share_memory_()
@@ -47,7 +50,7 @@ class AsyncReplayBuffer(mp.Process):
 
         def sample(cur_cache, beta):
             batch_data = replay.sample(batch_size=self.batch_size, beta=beta)
-            batch_data = [tensor(x) for x in batch_data]
+            batch_data = [torch.tensor(x, device=device) for x in batch_data]
             for cache_x, x in zip(cache[cur_cache], batch_data):
                 cache_x.copy_(x)
 

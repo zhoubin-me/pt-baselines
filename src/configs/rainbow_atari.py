@@ -6,6 +6,7 @@ class Config:
     algo = 'Rainbow'
     env_type = 'atari'
     seed = 0
+    device_id = 0
 
     # Rainbow related
     dueling = True

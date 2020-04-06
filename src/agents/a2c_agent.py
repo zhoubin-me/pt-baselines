@@ -11,7 +11,7 @@ from src.common.make_env import make_env, make_vec_envs
 from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer, MeanStdNormalizer
-from src.common.utils import tensor
+from src.common.utils import tensor, share_rms
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
 
@@ -19,18 +19,20 @@ class A2CAgent(BaseAgent):
     def __init__(self, cfg):
         super(A2CAgent, self).__init__(cfg)
 
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=cfg.log_dir, allow_early_resets=False, env_type=cfg.env_type)
-        self.test_env = make_env(cfg.game, cfg.env_type, seed=cfg.seed, log_prefix=f'{cfg.log_dir}/test', allow_early_resets=False)()
+        self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
+        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, env_type=cfg.env_type, device=self.device)
+        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, env_type=cfg.env_type, device=self.device)
+        share_rms(self.envs, self.test_env)
 
         if cfg.env_type == 'atari':
             NET = SepBodyConv if cfg.sep_body else ConvNet
-            self.network = NET(4, self.envs.action_space.n).cuda()
+            self.network = NET(4, self.envs.action_space.n).to(self.device)
             self.reward_normalizer = SignNormalizer()
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
         elif cfg.env_type == 'mujoco' or cfg.env_type == 'bullet':
             NET = SepBodyMLP if cfg.sep_body else MLPNet
-            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).cuda()
+            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).to(self.device)
             self.reward_normalizer = lambda x: x
             self.state_normalizer = lambda x: x
             self.action_store_dim = self.envs.action_space.shape[0]
@@ -53,30 +55,28 @@ class A2CAgent(BaseAgent):
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
 
         self.rollouts = Rollouts(
-            obs = torch.zeros(cfg.mini_steps + 1, cfg.num_processes,  * self.envs.observation_space.shape).cuda(),
-            actions = torch.zeros(cfg.mini_steps, cfg.num_processes, self.action_store_dim).cuda(),
-            action_log_probs = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).cuda(),
-            values = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
-            rewards = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).cuda(),
-            masks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
-            badmasks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
-            returns = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda(),
-            gaes = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).cuda()
+            obs = torch.zeros(cfg.mini_steps + 1, cfg.num_processes,  * self.envs.observation_space.shape).to(self.device),
+            actions = torch.zeros(cfg.mini_steps, cfg.num_processes, self.action_store_dim).to(self.device),
+            action_log_probs = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).to(self.device),
+            values = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+            rewards = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).to(self.device),
+            masks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+            badmasks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+            returns = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+            gaes = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device)
         )
 
         self.total_steps = 0
 
-    def eval_step(self, state):
-        states = torch.from_numpy(np.array(state)).unsqueeze(0).float().cuda()
-        v, pi = self.network(self.state_normalizer(states))
+
+    def eval_step(self):
+        v, pi = self.network(self.state_normalizer(self.test_state))
         if isinstance(self.envs.action_space, Discrete):
-            dist = Categorical(logits=pi * 10)
+            dist = Categorical(logits=pi)
             action = dist.sample()
-            action = action.squeeze(0).item()
         elif isinstance(self.envs.action_space, Box):
-            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp() * 0.1)
+            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
             action = dist.sample()
-            action = action.squeeze(0).cpu().numpy()
         else:
             raise NotImplementedError('No such action space')
         return action
@@ -116,7 +116,7 @@ class A2CAgent(BaseAgent):
                 self.total_steps += cfg.num_processes
                 rewards = self.reward_normalizer(rewards)
                 masks = 1.0 - dones
-                badmasks = tensor([[0.0] if 'TimeLimit.truncated' in info else [1.0] for info in infos])
+                badmasks = torch.tensor([[0.0] if 'TimeLimit.truncated' in info else [1.0] for info in infos], device=self.device)
 
                 rollouts.masks[step + 1].copy_(masks)
                 rollouts.badmasks[step + 1].copy_(badmasks)
@@ -235,13 +235,13 @@ class A2CAgent(BaseAgent):
             if epoch > last_epoch:
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 last_epoch = epoch
-                # test_returns = self.eval_episodes()
-                # test_tabular = {
-                #     "Epoch": self.total_steps // cfg.save_interval,
-                #     "Steps": self.total_steps,
-                #     "NumOfEp": len(test_returns),
-                #     "AverageTestEpRet": np.mean(test_returns),
-                #     "StdTestEpRet": np.std(test_returns),
-                #     "MaxTestEpRet": np.max(test_returns),
-                #     "MinTestEpRet": np.min(test_returns)}
-                # logger.dump_test(test_tabular)
+                test_returns = self.eval_episodes()
+                test_tabular = {
+                    "Epoch": self.total_steps // cfg.save_interval,
+                    "Steps": self.total_steps,
+                    "NumOfEp": len(test_returns),
+                    "AverageTestEpRet": np.mean(test_returns),
+                    "StdTestEpRet": np.std(test_returns),
+                    "MaxTestEpRet": np.max(test_returns),
+                    "MinTestEpRet": np.min(test_returns)}
+                logger.dump_test(test_tabular)

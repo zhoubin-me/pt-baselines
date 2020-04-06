@@ -123,8 +123,8 @@ class TRPOAgent(A2CAgent):
 
             step = self.conjugate_gradients(fisher_product, grads, cfg.cg_iters)
 
-            max_step_coeff = (2 * cfg.max_kl / (step @ fisher_product(step))) ** (0.5)
-            max_trpo_step = max_step_coeff * step
+            max_step_coef = (2 * cfg.max_kl / (step @ fisher_product(step))) ** (0.5)
+            max_trpo_step = max_step_coef * step
 
             with torch.no_grad():
                 value_loss = (vs - value_batch - gae_batch).pow(2).mean()

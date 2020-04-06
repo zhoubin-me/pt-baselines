@@ -1,10 +1,11 @@
 import gym
 import pybullet_envs
-# import pybulletgym
+import torch
 from gym import wrappers
 from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv
 from src.common.monitor import Monitor
 from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack, DummyVecEnv, VecNormalize
+from src.common.utils import mkdir
 
 def make_env(game, env_type, **kwargs):
     if env_type == 'atari':
@@ -22,7 +23,7 @@ def make_bullet_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
         env = gym.make(f"{game}BulletEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if record_video else env
+        env = wrappers.Monitor(env, log_prefix, force=True) if record_video else env
         return env
     return trunk
 
@@ -31,7 +32,7 @@ def make_mujoco_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
         env = gym.make(f"{game}MuJoCoEnv-v0")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
-        env = wrappers.Monitor(env, f'{log_prefix}', force=True) if record_video else env
+        env = wrappers.Monitor(env, log_prefix, force=True) if record_video else env
         return env
     return trunk
 
@@ -67,8 +68,9 @@ def make_a3c_env(game, log_prefix, record_video=False, seed=1234):
     return trunk
 
 
-def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, env_type='atari', record_video=False, **kwargs):
+def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, env_type='atari', device=None, **kwargs):
 
+    mkdir(log_dir)
     envs = [
         make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}',
                  seed=seed+i, frame_stack=False, allow_early_resets=allow_early_resets, **kwargs)
@@ -78,7 +80,9 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, e
     envs = ShmemVecEnv(envs, context='fork') if num_processes > 1 else DummyVecEnv(envs)
     envs = VecNormalize(envs) if env_type == 'mujoco' or env_type == 'bullet' else envs
 
-    envs = VecPyTorch(envs)
+    device = torch.device('cpu') if device is None else device
+
+    envs = VecPyTorch(envs, device)
     envs = VecPyTorchFrameStack(envs, 4) if env_type == 'atari' else envs
 
     return envs
