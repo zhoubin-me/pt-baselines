@@ -1,6 +1,6 @@
 import gym
 import pybullet_envs
-# import pybulletgym
+import torch
 from gym import wrappers
 from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42, NormalizedEnv
 from src.common.monitor import Monitor
@@ -67,7 +67,7 @@ def make_a3c_env(game, log_prefix, record_video=False, seed=1234):
     return trunk
 
 
-def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, env_type='atari', record_video=False, **kwargs):
+def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, env_type='atari', device=None, **kwargs):
 
     envs = [
         make_env(game, env_type, log_prefix=f'{log_dir}/rank_{i}',
@@ -78,7 +78,9 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=True, e
     envs = ShmemVecEnv(envs, context='fork') if num_processes > 1 else DummyVecEnv(envs)
     envs = VecNormalize(envs) if env_type == 'mujoco' or env_type == 'bullet' else envs
 
-    envs = VecPyTorch(envs)
+    device = torch.device('cpu') if device is None else device
+
+    envs = VecPyTorch(envs, device)
     envs = VecPyTorchFrameStack(envs, 4) if env_type == 'atari' else envs
 
     return envs

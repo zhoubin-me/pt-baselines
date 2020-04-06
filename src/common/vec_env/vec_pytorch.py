@@ -6,14 +6,15 @@ from src.common.vec_env import VecEnvWrapper
 
 
 class VecPyTorch(VecEnvWrapper):
-    def __init__(self, venv):
+    def __init__(self, venv, device):
         """Return only every `skip`-th frame"""
         super(VecPyTorch, self).__init__(venv)
+        self.device = device
         # TODO: Fix data types
 
     def reset(self):
         obs = self.venv.reset()
-        obs = torch.from_numpy(obs).float().cuda()
+        obs = torch.from_numpy(obs).float().to(self.device)
         return obs
 
     def step_async(self, actions):
@@ -25,9 +26,9 @@ class VecPyTorch(VecEnvWrapper):
 
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
-        obs = torch.from_numpy(obs).float().cuda()
-        reward = torch.from_numpy(reward).unsqueeze(dim=1).float().cuda()
-        done = torch.from_numpy(done).unsqueeze(dim=-1).float().cuda()
+        obs = torch.from_numpy(obs).float().to(self.device)
+        reward = torch.from_numpy(reward).unsqueeze(dim=1).float().to(self.device)
+        done = torch.from_numpy(done).unsqueeze(dim=-1).float().to(self.device)
         return obs, reward, done, info
 
 
@@ -47,7 +48,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         high = np.repeat(wos.high, self.nstack, axis=0)
 
         self.stacked_obs = torch.zeros((venv.num_envs, ) +
-                                       low.shape).cuda()
+                                       low.shape).to(self.device)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)

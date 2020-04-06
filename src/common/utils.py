@@ -5,7 +5,9 @@ import os
 from pathlib import Path
 
 
-
+def share_rms(master_env, slave_env):
+    slave_env.ob_rms = master_env.ob_rms
+    slave_env.ret_rms = slave_env.ret_rms
 
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -34,7 +36,6 @@ def set_thread(n):
     os.environ['OMP_NUM_THREADS'] = str(n)
     os.environ['MKL_NUM_THREADS'] = str(n)
     torch.set_num_threads(n)
-
 
 def random_seed(seed=None):
     random.seed(seed)
