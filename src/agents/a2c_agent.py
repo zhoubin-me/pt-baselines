@@ -13,6 +13,7 @@ from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv, DDPGMLP
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
 from src.common.utils import share_rms
+from src.common.kfac_optimizer import KFACOptimizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
 
@@ -51,6 +52,8 @@ class A2CAgent(BaseAgent):
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
+        elif cfg.optimizer == 'kfac':
+            self.optimizer = KFACOptimizer(self.network.parameters())
         else:
             raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 
@@ -211,10 +214,28 @@ class A2CAgent(BaseAgent):
 
                 dist, log_probs, entropy = self.pdist(pis, action_batch)
 
-                value_loss = (value_batch + adv_batch - vs).pow(2).mean() * 0.5
+                value_loss = (value_batch + adv_batch - vs).pow(2).mean()
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()
-                loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 
+
+                if cfg.optimizer == 'kfac' and self.optimizer.steps % self.optimizer.Tcov == 0:
+                    for param in self.network.parameters():
+                        if param.grad is not None:
+                            param.grad.zero_()
+
+                    pg_fisher_loss = log_probs.mean().neg()
+                    value_noise = torch.randn_like(vs)
+
+                    sample_values = vs + value_noise
+                    vf_fisher_loss = (vs - sample_values.detach()).pow(2).mean().neg()
+
+                    fisher_loss = pg_fisher_loss + vf_fisher_loss
+
+                    self.optimizer.acc_stats = True
+                    fisher_loss.backward(retain_graph=True)
+                    self.optimizer.acc_stats = False
+
+                loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)

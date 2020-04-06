@@ -8,19 +8,19 @@ class Config:
     device_id = -1
 
     # Trainng related
-    num_processes = 1
-    mini_steps = 2048
-    mini_epoches = 10
-    num_mini_batch = 32
+    num_processes = 5
+    mini_steps = 16
+    mini_epoches = 1
+    num_mini_batch = 1
 
     max_steps = int(1e6)
-    log_interval = 4096
+    log_interval = num_processes * mini_steps * 100
     eval_episodes = 10
     save_interval = int(1e5)
     use_lr_decay = True
 
     # Optimizer related
-    optimizer = 'adam'
+    optimizer = 'kfac'
     gamma = 0.99
     lr = 3e-4
     eps = 1e-5
