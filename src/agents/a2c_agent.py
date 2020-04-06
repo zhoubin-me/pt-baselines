@@ -67,7 +67,6 @@ class A2CAgent(BaseAgent):
         )
 
         self.total_steps = 0
-        self.test_state = self.test_env.reset()
 
 
     def eval_step(self):

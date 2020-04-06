@@ -12,7 +12,9 @@ class BaseAgent:
         self.cfg = cfg
         self.network = None
         self.test_env = None
+        self.test_state = None
         self.state_normalizer = None
+
 
     def close(self):
         close_obj(self.test_env)
@@ -33,12 +35,16 @@ class BaseAgent:
 
     def eval_episode(self):
         env = self.test_env
+        if self.test_state is None:
+            self.test_state = env.reset()
         while True:
             action = self.eval_step()
             state, reward, done, info = env.step(action)
-            self.prev_state = state
-            if 'episode' in info[0]:
-                ret = info[0]['episode']['r']
+            self.test_state = state
+            if isinstance(info, list):
+                info = info[0]
+            if 'episode' in info:
+                ret = info['episode']['r']
                 break
         return ret
 
