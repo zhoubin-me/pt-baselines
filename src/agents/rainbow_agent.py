@@ -44,8 +44,8 @@ class RainbowActor(AsyncActor):
 
         cfg = self.cfg
 
-        if  cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
-            state = torch.from_numpy(self._state_normalizer([self._state])).float().to(self._device)
+        if cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
+            state = tensor(self._state).float().to(self._device).unsqueeze(0)
             with torch.no_grad():
                 probs, _ = self._network(state)
             action = (probs * self._atoms).sum(-1).argmax(dim=-1)
@@ -128,7 +128,7 @@ class RainbowAgent(BaseAgent):
 
     def eval_step(self):
         if np.random.rand() > self.cfg.test_epsilon:
-            state = self.state_normalizer(tensor(self.test_state).float().to(self.device)).unsqueeze(0)
+            state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
             prob, _ = self.network(state)
             q = (prob * self.atoms).sum(-1)
             action = np.argmax(q.tolist())
