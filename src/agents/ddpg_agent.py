@@ -1,12 +1,12 @@
 import torch
 import torch.nn.functional as F
 from copy import deepcopy
-from .a2c_agent import A2CAgent
+from .base_agent import BaseAgent
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.utils import tensor
 
-class DDPGAgent(A2CAgent):
+class DDPGAgent(BaseAgent):
     def __init__(self, cfg):
         super(DDPGAgent, self).__init__(cfg)
 
