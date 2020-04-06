@@ -9,7 +9,7 @@ import numpy as np
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
-from src.common.model import DDPGMLP
+from src.common.model import DDPGMLP, TD3MLP
 from src.common.utils import close_obj
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
@@ -68,7 +68,12 @@ class DDPGAgent(BaseAgent):
             device_id=cfg.device_id
         )
 
-        self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
+        if cfg.algo == 'DDPG':
+            self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
+        elif cfg.algo == 'TD3':
+            self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
+        else:
+            raise NotImplementedError
 
         self.network.train()
         self.network.share_memory()
@@ -108,10 +113,12 @@ class DDPGAgent(BaseAgent):
                     self.logger.store(TrainEpRet=info['episode']['r'])
         self.replay.add_batch(experiences)
 
-        if self.total_steps > cfg.exploration_steps:
-            self.update()
 
     def update(self):
+        cfg = self.cfg
+        if self.total_steps < cfg.exploration_steps:
+            return
+
         ## Upate
         cfg = self.cfg
         experiences = self.replay.sample()

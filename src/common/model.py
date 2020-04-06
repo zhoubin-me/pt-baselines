@@ -10,6 +10,45 @@ def init(m, gain=1.0):
         nn.init.orthogonal_(m.weight.data, gain)
         nn.init.zeros_(m.bias.data)
 
+class TD3MLP(nn.Module):
+    def __init__(self, num_inputs, action_dim):
+        super(TD3MLP, self).__init__()
+
+        self.v1 = nn.Sequential(
+            nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(64, 1)
+        )
+
+        self.v2 = nn.Sequential(
+            nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(64, 1)
+        )
+
+        self.p = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(64, action_dim)
+        )
+
+        self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
+
+        self.apply(lambda m: init(m, np.sqrt(2)))
+
+    def forward(self, x):
+        return 0, self.p(x)
+
+    def action_value(self, state, action):
+        x = torch.cat([state, action], dim=1)
+        return self.v1(x), self.v2(x)
+
+    def get_policy_params(self):
+        return chain(self.p.parameters(), iter([self.p_log_std]))
+
+    def get_value_params(self):
+        return chain(self.v1.parameters(), self.v2.parameters())
+
 class DDPGMLP(nn.Module):
     def __init__(self, num_inputs, action_dim):
         super(DDPGMLP, self).__init__()
