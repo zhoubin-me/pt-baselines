@@ -4,15 +4,22 @@ from importlib.machinery import SourceFileLoader
 from src.common.utils import random_seed, mkdir, set_thread
 from src.agents import *
 
-if __name__ == '__main__':
+def main(**kwargs):
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
-    parser.add_argument('cfg', type=str, help="Check configurations under src/configs/*.py")
-    args = parser.parse_known_args()[0]
-    cfg = SourceFileLoader('', args.cfg).load_module().Config
+    if 'cfg' in kwargs:
+        cfg = SourceFileLoader('', kwargs['cfg']).load_module().Config
+    else:
+        parser.add_argument('cfg', type=str, help="Check configurations under src/configs/*.py")
+        args = parser.parse_known_args()[0]
+        cfg = SourceFileLoader('', args.cfg).load_module().Config
 
     for k, v in cfg.__dict__.items():
         if not k.startswith('_'):
-            parser.add_argument(f'--{k}', type=type(v), default=v)
+            if k in kwargs:
+                parser.add_argument(f'--{k}', type=type(v), default=kwargs[k])
+            else:
+                parser.add_argument(f'--{k}', type=type(v), default=v)
+
     args = parser.parse_args()
 
     if len(args.log_dir) == 0:
@@ -44,3 +51,6 @@ if __name__ == '__main__':
         returns = agent.eval_episodes()
         print(f"Returns: {returns}")
         print(f"Max: {np.max(returns)}\t Min: {np.min(returns)}\t Std: {np.std(returns)}")
+
+if __name__ == '__main__':
+    main()

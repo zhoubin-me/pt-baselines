@@ -14,23 +14,31 @@ class BaseAgent:
         self.test_env = None
         self.test_state = None
         self.state_normalizer = None
-
+        self.reward_normalizer = None
 
     def close(self):
         close_obj(self.test_env)
 
     def save(self, filename):
+
         torch.save(self.network.state_dict(), '%s.model' % (filename))
-        # with open('%s.stats' % (filename), 'wb') as f:
-        #     pickle.dump(self.state_normalizer.state_dict(), f)
+        if hasattr(self.test_env, 'ob_rms'):
+            with open('%s.stats' % (filename), 'wb') as f:
+                pickle.dump({
+                    'ob_rms': self.test_env.ob_rms,
+                    'ret_rms': self.test_env.ret_rms
+                }, f)
 
     def load(self, filename):
         state_dict = torch.load(filename, map_location=lambda storage, loc: storage)
         self.network.load_state_dict(state_dict)
-        # with open('%s.stats' % (filename[:-6]), 'rb') as f:
-        #     self.state_normalizer.load_state_dict(pickle.load(f))
+        if hasattr(self.test_env, 'ob_rms'):
+            with open('%s.stats' % (filename[:-6]), 'rb') as f:
+                rms = pickle.load(f)
+                self.test_env.ob_rms = rms['ob_rms']
+                self.test_env.ret_rms = rms['ret_rms']
 
-    def eval_step(self, state):
+    def eval_step(self):
         raise NotImplementedError
 
     def eval_episode(self):
