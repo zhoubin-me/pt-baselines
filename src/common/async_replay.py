@@ -38,7 +38,7 @@ class AsyncReplayBuffer(mp.Process):
 
         def set_up_cache():
             batch_data = replay.sample(self.batch_size, beta=self.beta0)
-            batch_data = [tensor(x) for x in batch_data]
+            batch_data = [torch.tensor(x).cuda() for x in batch_data]
             for i in range(self.cache_len):
                 cache.append([x.clone() for x in batch_data])
                 for x in cache[i]: x.share_memory_()
@@ -47,7 +47,7 @@ class AsyncReplayBuffer(mp.Process):
 
         def sample(cur_cache, beta):
             batch_data = replay.sample(batch_size=self.batch_size, beta=beta)
-            batch_data = [tensor(x) for x in batch_data]
+            batch_data = [torch.tensor(x).cuda() for x in batch_data]
             for cache_x, x in zip(cache[cur_cache], batch_data):
                 cache_x.copy_(x)
 

@@ -8,7 +8,7 @@ from collections import deque
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
 from src.common.async_replay import AsyncReplayBuffer
-from src.common.utils import close_obj, tensor
+from src.common.utils import close_obj
 from src.common.make_env import make_atari_env
 from src.common.schedule import LinearSchedule
 from src.common.normalizer import ImageNormalizer, SignNormalizer
@@ -182,8 +182,8 @@ class RainbowAgent(BaseAgent):
                     actions_next = prob_next.mul(self.atoms).sum(dim=-1).argmax(dim=-1)
                 prob_next = prob_next[self.batch_indices, actions_next, :]
 
-                rewards = tensor(rewards).unsqueeze(-1)
-                terminals = tensor(terminals).unsqueeze(-1)
+                rewards = torch.tensor(rewards).cuda().unsqueeze(-1)
+                terminals = torch.tensor(terminals).cuda().unsqueeze(-1)
                 atoms_next = rewards + (cfg.discount ** cfg.nstep) * (1 - terminals) * self.atoms.view(1, -1)
 
                 atoms_next.clamp_(cfg.v_min, cfg.v_max)

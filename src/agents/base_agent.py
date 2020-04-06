@@ -33,12 +33,12 @@ class BaseAgent:
 
     def eval_episode(self):
         env = self.test_env
-        state = env.reset()
         while True:
-            action = self.eval_step(state)
+            action = self.eval_step()
             state, reward, done, info = env.step(action)
-            if 'episode' in info:
-                ret = info['episode']['r']
+            self.prev_state = state
+            if 'episode' in info[0]:
+                ret = info[0]['episode']['r']
                 break
         return ret
 

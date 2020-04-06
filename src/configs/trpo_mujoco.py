@@ -7,6 +7,7 @@ class Config:
     env_type = 'mujoco'
     sep_body = True
     seed = 0
+    device_id = -1
 
     # Training related
     num_processes = 1

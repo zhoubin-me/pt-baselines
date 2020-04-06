@@ -7,6 +7,7 @@ class Config:
     env_type = 'atari'
     seed = 0
     sep_body = False
+    device_id = 0
 
     # Training related
     num_processes = 8
