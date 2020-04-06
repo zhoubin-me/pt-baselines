@@ -24,6 +24,7 @@ class A2CAgent(BaseAgent):
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, device=self.device)
         self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
+
         share_rms(self.envs, self.test_env)
 
         if cfg.algo == 'TRPO':
@@ -162,6 +163,7 @@ class A2CAgent(BaseAgent):
                 delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
                 rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]) * rollouts.badmasks[step + 1]
 
+        self.update()
 
     def sample(self, mini_batch_size=None):
         cfg = self.cfg
@@ -237,7 +239,6 @@ class A2CAgent(BaseAgent):
 
         while self.total_steps < cfg.max_steps:
             self.step()
-            self.update()
 
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)

@@ -56,7 +56,7 @@ def make_a3c_env(game, log_prefix, record_video=False, seed=1234):
     return trunk
 
 
-def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, env_type='atari', device=None, **kwargs):
+def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, device=None, **kwargs):
 
     mkdir(log_dir)
     envs = [
@@ -66,11 +66,11 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, 
     ]
 
     envs = ShmemVecEnv(envs, context='fork') if num_processes > 1 else DummyVecEnv(envs)
-    envs = VecNormalize(envs) if env_type == 'mujoco' or env_type == 'bullet' else envs
+    envs = VecNormalize(envs) if len(envs.observation_space.shape) == 1 else envs
 
     device = torch.device('cpu') if device is None else device
 
     envs = VecPyTorch(envs, device)
-    envs = VecPyTorchFrameStack(envs, 4) if env_type == 'atari' else envs
+    envs = VecPyTorchFrameStack(envs, 4) if len(envs.observation_space.shape) == 1 else envs
 
     return envs
