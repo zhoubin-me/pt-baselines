@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    game = "Reacher2D"
+    game = "Reacher"
     algo = 'A2C'
     seed = 0
     device_id = -1

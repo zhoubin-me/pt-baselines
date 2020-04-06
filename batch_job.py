@@ -10,11 +10,10 @@ from run import main
 cfgs = glob.glob('src/configs/*.py')
 q = JoinableQueue()
 NUM_THREADS = 40
-seed = 4
 
 def run_single_config(queue):
     while True:
-        config_path, game = queue.get()
+        config_path, game, seed = queue.get()
         try:
             main(cfg=config_path, game=game, seed=seed)
         except Exception as e:
@@ -27,13 +26,14 @@ for i in range(NUM_THREADS):
     worker.daemon = True
     worker.start()
 
-for cfg in cfgs:
-    if 'mujoco' in cfg:
-        pass
-    else:
-        continue
+for seed in [1, 2, 3, 4, 5]:
+    for cfg in cfgs:
+        if 'mujoco' in cfg:
+            pass
+        else:
+            continue
 
-    for game in _mujoco7:
-        q.put((cfg, game))
+        for game in _mujoco7:
+            q.put((cfg, game, seed))
 
 q.join()
