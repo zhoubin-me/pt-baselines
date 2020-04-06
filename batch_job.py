@@ -35,9 +35,9 @@ for cfg in cfgs:
     else:
         continue
 
-    for game in _mujoco7:
+    for i, game in enumerate(_mujoco7):
         if 'ddpg' in cfg or 'rainbow' in cfg:
-            os.system(f'python run.py {cfg} --seed {seed} --game {game} & ')
+            os.system(f'python run.py {cfg} --seed {seed} --game {game} --device_id {i} & ')
         else:
             q.put((cfg, game))
 
