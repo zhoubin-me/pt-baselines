@@ -13,7 +13,7 @@ from src.common.utils import close_obj, tensor
 from src.common.make_env import make_bullet_env
 
 from src.common.logger import EpochLogger
-from src.common.model import DDPGMLP
+from src.common.model import DDPGMLP, TD3MLP
 
 class DDPGActor(AsyncActor):
     def __init__(self, cfg, lock, device_id):
@@ -68,8 +68,14 @@ class DDPGAgent(BaseAgent):
             batch_size=cfg.batch_size,
             device_id=cfg.device_id
         )
+        if cfg.algo == 'DDPG':
+            NET = DDPGMLP
+        elif cfg.algo == 'TD3':
+            NET = TD3MLP
+        else:
+            raise NotImplementedError
 
-        self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
+        self.network = NET(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
 
         self.network.train()
         self.network.share_memory()
@@ -81,7 +87,6 @@ class DDPGAgent(BaseAgent):
         self.critic_optimizer = torch.optim.Adam(self.network.get_value_params(), lr=cfg.v_lr, weight_decay=cfg.v_w_decay)
 
         self.total_steps = 0
-        self.max_action = float(self.test_env.action_space.high[0])
 
     def close(self):
         close_obj(self.replay)
@@ -114,6 +119,7 @@ class DDPGAgent(BaseAgent):
 
     def update(self):
         ## Upate
+        cfg = self.cfg
         experiences = self.replay.sample()
         states, actions, rewards, next_states, terminals = experiences
         states = states.float()

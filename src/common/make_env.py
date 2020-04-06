@@ -6,10 +6,10 @@ from src.common.env_wrappers import make_atari, wrap_deepmind, AtariRescale42x42
 from src.common.monitor import Monitor
 from src.common.vec_env import ShmemVecEnv, VecPyTorch, VecPyTorchFrameStack, DummyVecEnv, VecNormalize
 from src.common.utils import mkdir
-from src.common.bench import _atari63, _mujoco7
+from src.common.bench import _atari50, _mujoco7
 
 def make_env(game, **kwargs):
-    if game in _atari63:
+    if game in _atari50:
         return make_atari_env(game, **kwargs)
     elif game in _mujoco7:
         return make_bullet_env(game, **kwargs)
@@ -33,7 +33,8 @@ def make_atari_env(game,
                    episode_life=True,
                    transpose_image=True,
                    clip_rewards=True,
-                   allow_early_resets=True):
+                   allow_early_resets=True,
+                   **kwargs):
     def trunk():
         env = make_atari(f'{game}NoFrameskip-v4')
         env.seed(seed)
@@ -68,9 +69,7 @@ def make_vec_envs(game, log_dir, num_processes, seed, allow_early_resets=False, 
     device = torch.device('cpu') if device is None else device
 
     envs = ShmemVecEnv(envs, context='fork') if num_processes > 1 else DummyVecEnv(envs)
-
     envs = VecNormalize(envs) if len(envs.observation_space.shape) == 1 else envs
-
     envs = VecPyTorch(envs, device)
 
     if len(envs.observation_space.shape) == 3:

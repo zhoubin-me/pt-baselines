@@ -29,8 +29,6 @@ class A2CAgent(BaseAgent):
 
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
-        elif cfg.algo == 'DDPG':
-            NET = DDPGMLP
         else:
             NET = ConvNet if len(self.envs.observation_space.shape) == 3 else MLPNet
 
@@ -211,7 +209,7 @@ class A2CAgent(BaseAgent):
 
                 dist, log_probs, entropy = self.pdist(pis, action_batch)
 
-                value_loss = (value_batch + adv_batch - vs).pow(2).mean() * 0.5
+                value_loss = (return_batch - vs).pow(2).mean() * 0.5
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()
                 loss = value_loss * cfg.value_loss_coef + policy_loss - cfg.entropy_coef * entropy
 

@@ -24,7 +24,6 @@ class Config:
     gamma = 0.99
     lr = 3e-4
     eps = 1e-5
-    alpha = 0.99
 
     # TRPO related
     max_kl = 1e-2
@@ -33,7 +32,6 @@ class Config:
     accept_ratio = 0.1
     max_backtracks = 10
     residual_tol = 1e-10
-    fisher_frac = 0.125
 
     # Loss related
     gae_lambda = 0.97

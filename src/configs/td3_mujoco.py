@@ -1,7 +1,7 @@
 
 class Config:
     game = "Reacher"
-    algo = 'DDPG'
+    algo = 'TD3'
     seed = 0
     device_id = 0
     num_processes = 1

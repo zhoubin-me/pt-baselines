@@ -5,6 +5,7 @@ class Config:
     game = "Pong"
     algo = 'A2C'
     seed = 0
+    device_id = 0
 
     # Trainng related
     num_processes = 16
@@ -13,7 +14,7 @@ class Config:
     num_mini_batch = 1
 
     max_steps = int(1e7)
-    log_interval = num_processes * mini_steps * 100
+    log_interval = 10000
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = False

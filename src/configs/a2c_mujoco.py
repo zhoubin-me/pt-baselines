@@ -8,13 +8,13 @@ class Config:
     device_id = -1
 
     # Trainng related
-    num_processes = 1
-    mini_steps = 2048
-    mini_epoches = 10
-    num_mini_batch = 32
+    num_processes = 16
+    mini_steps = 5
+    mini_epoches = 1
+    num_mini_batch = 1
 
     max_steps = int(1e6)
-    log_interval = 4096
+    log_interval = 5000
     eval_episodes = 10
     save_interval = int(1e5)
     use_lr_decay = True

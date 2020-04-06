@@ -11,10 +11,10 @@ class Config:
     num_processes = 1
     mini_steps = 2048
     mini_epoches = 1
-    num_mini_batch = 1
+    num_mini_batch = 32
 
     max_steps = int(1e7)
-    log_interval = mini_steps * num_processes
+    log_interval = 10000
     eval_episodes = 10
     save_interval = int(1e6)
     use_lr_decay = True

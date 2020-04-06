@@ -43,7 +43,7 @@ class BaseAgent:
 
     def eval_episode(self):
         env = self.test_env
-        if self.test_state is None or self.cfg.algo == 'Rainbow' or self.cfg.algo == 'DDPG':
+        if self.test_state is None or self.cfg.algo in ['Rainbow', 'DDPG', 'TD3']:
             self.test_state = env.reset()
 
         while True:
