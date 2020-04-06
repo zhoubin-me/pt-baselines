@@ -19,7 +19,6 @@ def tensor(x, device):
     x = torch.tensor(x, dtype=torch.float32, device=device)
     return x
 
-  return None if vary == 0 else 1 - torch.var(y - ypred) / vary
 
 
 def close_obj(obj):

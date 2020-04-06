@@ -1,3 +1,4 @@
+import torch
 import torch.multiprocessing as mp
 
 from src.common.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
