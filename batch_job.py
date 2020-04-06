@@ -22,18 +22,23 @@ def run_single_config(queue):
             raise e
         queue.task_done()
 
+
+
 for i in range(NUM_THREADS):
     worker = Process(target=run_single_config, args=(q,))
     worker.daemon = True
     worker.start()
 
 for cfg in cfgs:
-    if 'mujoco' in cfg:
+    if 'ddpg' in cfg:
         pass
     else:
         continue
 
     for game in _mujoco7:
-        q.put((cfg, game))
+        if 'ddpg' in cfg or 'rainbow' in cfg:
+            os.system(f'python run.py {cfg} --seed {seed} --game {game} & ')
+        else:
+            q.put((cfg, game))
 
 q.join()
