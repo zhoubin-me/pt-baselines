@@ -5,6 +5,7 @@ class Config:
     game = "Pong"
     algo = 'A2C'
     seed = 0
+    device_id = 0
 
     # Trainng related
     num_processes = 16
@@ -19,7 +20,7 @@ class Config:
     use_lr_decay = False
 
     # Optimizer related
-    optimizer = 'adam'
+    optimizer = 'kfac'
     gamma = 0.99
     lr = 2.5e-4
     eps = 1e-5

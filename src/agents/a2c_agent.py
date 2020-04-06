@@ -25,8 +25,8 @@ class A2CAgent(BaseAgent):
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, device=self.device)
         self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
-
-        share_rms(self.envs, self.test_env)
+        if hasattr(self.envs, 'ob_rms'):
+            share_rms(self.envs, self.test_env)
 
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
