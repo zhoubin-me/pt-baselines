@@ -4,3 +4,4 @@ from .ppo_agent import PPOAgent
 from .trpo_agent import TRPOAgent
 from .rainbow_agent import RainbowAgent
 from .ddpg_agent import DDPGAgent
+from .td3_agent import TD3Agent

@@ -14,7 +14,7 @@ class TD3MLP(nn.Module):
     def __init__(self, num_inputs, action_dim):
         super(TD3MLP, self).__init__()
 
-        self.v1 = nn.Sequential(
+        self.v = nn.Sequential(
             nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
             nn.Linear(64, 1)
@@ -41,13 +41,13 @@ class TD3MLP(nn.Module):
 
     def action_value(self, state, action):
         x = torch.cat([state, action], dim=1)
-        return self.v1(x), self.v2(x)
+        return self.v(x), self.v2(x)
 
     def get_policy_params(self):
         return chain(self.p.parameters(), iter([self.p_log_std]))
 
     def get_value_params(self):
-        return chain(self.v1.parameters(), self.v2.parameters())
+        return chain(self.v.parameters(), self.v2.parameters())
 
 class DDPGMLP(nn.Module):
     def __init__(self, num_inputs, action_dim):
