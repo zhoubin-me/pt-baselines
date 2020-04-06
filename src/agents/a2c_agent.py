@@ -168,6 +168,20 @@ class A2CAgent(BaseAgent):
             adv_batch = advs[indices]
             yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch
 
+    def pdist(self, pis, action_batch):
+        if isinstance(self.envs.action_space, Discrete):
+            pdist = Categorical(logits=pis)
+            log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1)
+            entropy = pdist.entropy().mean()
+        elif isinstance(self.envs.action_space, Box):
+            pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
+            log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True)
+            entropy = pdist.entropy().sum(-1).mean()
+        else:
+            raise NotImplementedError('No such action space')
+
+        return pdist, log_prob, entropy
+
     def update(self):
         cfg = self.cfg
         for epoch in range(cfg.mini_epoches):
@@ -177,16 +191,7 @@ class A2CAgent(BaseAgent):
 
                 vs, pis = self.network(obs_batch)
 
-                if isinstance(self.envs.action_space, Discrete):
-                    dist = Categorical(logits=pis)
-                    log_probs = dist.log_prob(action_batch.view(-1)).unsqueeze(-1)
-                    entropy = dist.entropy().mean()
-                elif isinstance(self.envs.action_space, Box):
-                    dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-                    log_probs = dist.log_prob(action_batch.view(-1, self.action_store_dim)).sum(-1, keepdim=True)
-                    entropy = dist.entropy().sum(-1).mean()
-                else:
-                    raise NotImplementedError('No such action space')
+                dist, log_probs, entropy = self.pdist(pis, action_batch)
 
                 value_loss = (value_batch + adv_batch - vs).pow(2).mean() * 0.5
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()

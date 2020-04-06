@@ -69,19 +69,6 @@ class TRPOAgent(A2CAgent):
             raise NotImplementedError("KL not implemented")
         return kl
 
-    def pdist(self, pis, action_batch):
-        if isinstance(self.envs.action_space, Discrete):
-            pdist = Categorical(logits=pis)
-            log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1)
-            entropy = pdist.entropy().mean()
-        elif isinstance(self.envs.action_space, Box):
-            pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-            log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True)
-            entropy = pdist.entropy().sum(-1).mean()
-        else:
-            raise NotImplementedError('No such action space')
-
-        return pdist, log_prob, entropy
 
     def update(self):
         cfg = self.cfg

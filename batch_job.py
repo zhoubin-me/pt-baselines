@@ -9,7 +9,7 @@ cfgs = glob.glob('src/configs/*.py')
 _mujoco8.pop(-2)
 
 for cfg in cfgs:
-    if 'trpo' in cfg and 'atari' in cfg:
+    if 'mujoco' in cfg:
         pass
     else:
         continue
@@ -19,4 +19,4 @@ for cfg in cfgs:
             os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1 & ')
     elif 'mujoco' in cfg:
         for i, game in enumerate(_mujoco8):
-            os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1 & ')
+            os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 3')
