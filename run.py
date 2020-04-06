@@ -1,8 +1,10 @@
 import numpy as np
 import argparse
+import git
 from importlib.machinery import SourceFileLoader
 from src.common.utils import random_seed, mkdir, set_thread
 from src.agents import *
+import git
 
 def main(**kwargs):
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
@@ -12,6 +14,8 @@ def main(**kwargs):
         parser.add_argument('cfg', type=str, help="Check configurations under src/configs/*.py")
         args = parser.parse_known_args()[0]
         cfg = SourceFileLoader('', args.cfg).load_module().Config
+
+    cfg.sha = git.Repo().head.object.hexsha
 
     for k, v in cfg.__dict__.items():
         if not k.startswith('_'):
