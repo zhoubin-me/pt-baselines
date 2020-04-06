@@ -5,12 +5,47 @@ import torch.nn.functional as F
 
 from torch.distributions import Normal, Categorical
 from itertools import chain
-from gym.spaces import Box, Discrete
 
 def init(m, gain=1.0):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data, gain)
         nn.init.zeros_(m.bias.data)
+
+
+
+class DDPGMLP(nn.Module):
+    def __init__(self, num_inputs, action_dim):
+        super(DDPGMLP, self).__init__()
+
+        self.v = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.Tanh(),
+            nn.Linear(64, 64 + action_dim), nn.Tanh(),
+        )
+
+        self.v_head = nn.Linear(64 + action_dim, 1)
+
+        self.p = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(64, action_dim)
+        )
+
+        self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
+
+        self.apply(lambda m: init(m, np.sqrt(2)))
+
+    def forward(self, x):
+        return 0, self.p(x)
+
+    def action_value(self, state, action):
+        v_feat = self.v(state)
+        return self.v_head(torch.cat([v_feat, action], dim=0))
+
+    def get_policy_params(self):
+        return chain(self.p.parameters(), iter([self.p_log_std]))
+
+    def get_value_params(self):
+        return chain(self.v.parameters(), self.v_head.parameters())
 
 class SepBodyConv(nn.Module):
     def __init__(self, in_channels, action_dim):

@@ -19,8 +19,6 @@ def tensor(x, device):
     x = torch.tensor(x, dtype=torch.float32, device=device)
     return x
 
-
-
 def close_obj(obj):
     if hasattr(obj, 'close'):
         obj.close()

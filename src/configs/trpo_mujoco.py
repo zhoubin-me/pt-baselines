@@ -4,8 +4,6 @@ from dataclasses import dataclass
 class Config:
     game = "Reacher"
     algo = "TRPO"
-    env_type = 'mujoco'
-    sep_body = True
     seed = 0
     device_id = -1
 

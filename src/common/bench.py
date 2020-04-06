@@ -20,6 +20,6 @@ _atari50 = [  # actually 47
     'VideoPinball', 'WizardOfWor', 'Zaxxon',
 ]
 
-_mujoco8 = [
-    'Reacher', 'Hopper', 'HalfCheetah', 'Walker2D', "InvertedPendulum", "Ant", "Swimmer", "InvertedDoublePendulum"
+_mujoco7 = [
+    'Reacher', 'Hopper', 'HalfCheetah', 'Walker2D', "InvertedPendulum", "Ant", "InvertedDoublePendulum"
 ]

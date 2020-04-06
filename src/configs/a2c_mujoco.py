@@ -4,9 +4,7 @@ from dataclasses import dataclass
 class Config:
     game = "Reacher2D"
     algo = 'A2C'
-    env_type = 'mujoco'
     seed = 0
-    sep_body = True
     device_id = -1
 
     # Trainng related

@@ -1,22 +1,39 @@
 import os
 import torch
 import glob
-from src.common.bench import _atari7, _mujoco8
+from multiprocessing import Process, JoinableQueue
+import sys
+import json
+from src.common.bench import _atari7, _mujoco7
+from run import main
 
-
-N = torch.cuda.device_count()
 cfgs = glob.glob('src/configs/*.py')
-_mujoco8.pop(-2)
+q = JoinableQueue()
+NUM_THREADS = 40
+seed = 4
+
+def run_single_config(queue):
+    while True:
+        config_path, game = queue.get()
+        try:
+            main(cfg=config_path, game=game, seed=seed)
+        except Exception as e:
+            print("ERROR", e)
+            raise e
+        queue.task_done()
+
+for i in range(NUM_THREADS):
+    worker = Process(target=run_single_config, args=(q,))
+    worker.daemon = True
+    worker.start()
 
 for cfg in cfgs:
-    if 'trpo' in cfg and 'atari' in cfg:
+    if 'mujoco' in cfg:
         pass
     else:
         continue
 
-    if 'atari' in cfg:
-        for i, game in enumerate(_atari7):
-            os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1 & ')
-    elif 'mujoco' in cfg:
-        for i, game in enumerate(_mujoco8):
-            os.system(f'export CUDA_VISIBLE_DEVICES="{i % N}";python -m run {cfg} --game {game} --seed 1 & ')
+    for game in _mujoco7:
+        q.put((cfg, game))
+
+q.join()

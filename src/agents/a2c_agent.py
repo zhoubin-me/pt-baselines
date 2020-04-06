@@ -7,31 +7,38 @@ import time
 from collections import namedtuple
 
 from .base_agent import BaseAgent
-from src.common.make_env import make_env, make_vec_envs
-from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv
+from src.common.async_replay import AsyncReplayBuffer
+from src.common.make_env import make_vec_envs
+from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv, DDPGMLP
 from src.common.logger import EpochLogger
-from src.common.normalizer import SignNormalizer, ImageNormalizer, MeanStdNormalizer
-from src.common.utils import tensor, share_rms
+from src.common.normalizer import SignNormalizer, ImageNormalizer
+from src.common.utils import share_rms
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
+
 
 class A2CAgent(BaseAgent):
     def __init__(self, cfg):
         super(A2CAgent, self).__init__(cfg)
 
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
-        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, env_type=cfg.env_type, device=self.device)
-        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, env_type=cfg.env_type, device=self.device)
+        self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, device=self.device)
+        self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
         share_rms(self.envs, self.test_env)
 
-        if cfg.env_type == 'atari':
-            NET = SepBodyConv if cfg.sep_body else ConvNet
+        if cfg.algo == 'TRPO':
+            NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
+        elif cfg.algo == 'DDPG':
+            NET = DDPGMLP
+        else:
+            NET = ConvNet if len(self.envs.observation_space.shape) == 3 else MLPNet
+
+        if len(self.envs.observation_space.shape) == 3:
             self.network = NET(4, self.envs.action_space.n).to(self.device)
             self.reward_normalizer = SignNormalizer()
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
-        elif cfg.env_type == 'mujoco' or cfg.env_type == 'bullet':
-            NET = SepBodyMLP if cfg.sep_body else MLPNet
+        elif len(self.envs.observation_space.shape) == 1:
             self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).to(self.device)
             self.reward_normalizer = lambda x: x
             self.state_normalizer = lambda x: x
@@ -54,17 +61,21 @@ class A2CAgent(BaseAgent):
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
 
-        self.rollouts = Rollouts(
-            obs = torch.zeros(cfg.mini_steps + 1, cfg.num_processes,  * self.envs.observation_space.shape).to(self.device),
-            actions = torch.zeros(cfg.mini_steps, cfg.num_processes, self.action_store_dim).to(self.device),
-            action_log_probs = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).to(self.device),
-            values = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
-            rewards = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).to(self.device),
-            masks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
-            badmasks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
-            returns = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
-            gaes = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device)
-        )
+        if cfg.algo == 'DDPG':
+            self.rollouts = AsyncReplayBuffer(cfg.buffer_size, cfg.batch_size, device_id=cfg.device_id)
+
+        else:
+            self.rollouts = Rollouts(
+                obs = torch.zeros(cfg.mini_steps + 1, cfg.num_processes,  * self.envs.observation_space.shape).to(self.device),
+                actions = torch.zeros(cfg.mini_steps, cfg.num_processes, self.action_store_dim).to(self.device),
+                action_log_probs = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).to(self.device),
+                values = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+                rewards = torch.zeros(cfg.mini_steps, cfg.num_processes, 1).to(self.device),
+                masks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+                badmasks = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+                returns = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device),
+                gaes = torch.zeros(cfg.mini_steps + 1, cfg.num_processes, 1).to(self.device)
+            )
 
         self.total_steps = 0
 
@@ -80,6 +91,23 @@ class A2CAgent(BaseAgent):
         else:
             raise NotImplementedError('No such action space')
         return action
+
+    def act(self, pis):
+        if isinstance(self.envs.action_space, Discrete):
+            dist = Categorical(logits=pis)
+            actions = dist.sample()
+            action_log_probs = dist.log_prob(actions)
+            actions = actions.unsqueeze(-1)
+            action_log_probs = action_log_probs.unsqueeze(-1)
+
+        elif isinstance(self.envs.action_space, Box):
+            dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
+            actions = dist.sample()
+            action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
+        else:
+            raise NotImplementedError('No such action space')
+
+        return actions, action_log_probs
 
     def step(self):
         cfg = self.cfg
@@ -98,19 +126,7 @@ class A2CAgent(BaseAgent):
 
                 v, pi = self.network(self.rollouts.obs[step])
 
-                if isinstance(self.envs.action_space, Discrete):
-                    dist = Categorical(logits=pi)
-                    actions = dist.sample()
-                    action_log_probs = dist.log_prob(actions)
-                    actions = actions.unsqueeze(-1)
-                    action_log_probs = action_log_probs.unsqueeze(-1)
-
-                elif isinstance(self.envs.action_space, Box):
-                    dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
-                    actions = dist.sample()
-                    action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
-                else:
-                    raise NotImplementedError('No such action space')
+                actions, action_log_probs = self.act(pi)
 
                 states, rewards, dones, infos = self.envs.step(actions)
                 self.total_steps += cfg.num_processes
@@ -168,6 +184,20 @@ class A2CAgent(BaseAgent):
             adv_batch = advs[indices]
             yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch
 
+    def pdist(self, pis, action_batch):
+        if isinstance(self.envs.action_space, Discrete):
+            pdist = Categorical(logits=pis)
+            log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1)
+            entropy = pdist.entropy().mean()
+        elif isinstance(self.envs.action_space, Box):
+            pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
+            log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True)
+            entropy = pdist.entropy().sum(-1).mean()
+        else:
+            raise NotImplementedError('No such action space')
+
+        return pdist, log_prob, entropy
+
     def update(self):
         cfg = self.cfg
         for epoch in range(cfg.mini_epoches):
@@ -177,16 +207,7 @@ class A2CAgent(BaseAgent):
 
                 vs, pis = self.network(obs_batch)
 
-                if isinstance(self.envs.action_space, Discrete):
-                    dist = Categorical(logits=pis)
-                    log_probs = dist.log_prob(action_batch.view(-1)).unsqueeze(-1)
-                    entropy = dist.entropy().mean()
-                elif isinstance(self.envs.action_space, Box):
-                    dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-                    log_probs = dist.log_prob(action_batch.view(-1, self.action_store_dim)).sum(-1, keepdim=True)
-                    entropy = dist.entropy().sum(-1).mean()
-                else:
-                    raise NotImplementedError('No such action space')
+                dist, log_probs, entropy = self.pdist(pis, action_batch)
 
                 value_loss = (value_batch + adv_batch - vs).pow(2).mean() * 0.5
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()

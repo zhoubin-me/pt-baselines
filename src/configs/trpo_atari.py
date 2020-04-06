@@ -4,9 +4,8 @@ from dataclasses import dataclass
 class Config:
     game = "Pong"
     algo = "TRPO"
-    env_type = 'atari'
-    sep_body = True
     seed = 0
+    device_id = 0
 
     # Training related
     num_processes = 1
