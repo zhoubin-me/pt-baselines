@@ -53,7 +53,7 @@ class A2CAgent(BaseAgent):
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
         elif cfg.optimizer == 'kfac':
-            self.optimizer = KFACOptimizer(self.network.parameters())
+            self.optimizer = KFACOptimizer(self.network)
         else:
             raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
 
@@ -218,7 +218,7 @@ class A2CAgent(BaseAgent):
                 policy_loss = (adv_batch.detach() * log_probs).mean().neg()
 
 
-                if cfg.optimizer == 'kfac' and self.optimizer.steps % self.optimizer.Tcov == 0:
+                if cfg.optimizer == 'kfac' and self.optimizer.steps % self.optimizer.TCov == 0:
                     for param in self.network.parameters():
                         if param.grad is not None:
                             param.grad.zero_()

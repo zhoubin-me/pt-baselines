@@ -11,25 +11,26 @@ def init(m, gain=1.0):
         nn.init.zeros_(m.bias.data)
 
 class TD3MLP(nn.Module):
-    def __init__(self, num_inputs, action_dim):
+    def __init__(self, num_inputs, action_dim, hidden_size=512):
         super(TD3MLP, self).__init__()
 
         self.v = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, 1)
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, 1)
         )
 
         self.v2 = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, 1)
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, 1)
         )
 
+
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, action_dim)
+            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, action_dim)
         )
 
         self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
@@ -50,19 +51,19 @@ class TD3MLP(nn.Module):
         return chain(self.v.parameters(), self.v2.parameters())
 
 class DDPGMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim):
+    def __init__(self, num_inputs, action_dim, hidden_size=512):
         super(DDPGMLP, self).__init__()
 
         self.v = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, 1)
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, 1)
         )
 
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, action_dim)
+            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, action_dim)
         )
 
         self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
