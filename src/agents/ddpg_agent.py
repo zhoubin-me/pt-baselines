@@ -59,6 +59,7 @@ class DDPGAgent(BaseAgent):
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
         self.actor = DDPGActor(cfg, self.lock, cfg.device_id)
         self.test_env = make_bullet_env(cfg.game, cfg.log_dir + '/test', seed=cfg.seed+1)()
+        self.action_high = self.test_env.action_space.high[0]
 
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
@@ -91,6 +92,7 @@ class DDPGAgent(BaseAgent):
         pi = self.network.p(state)
         dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
         action = dist.sample()
+        action = action.clamp(-self.action_high, self.action_high)
         return action.squeeze(0).cpu().numpy()
 
     def step(self):
@@ -107,41 +109,43 @@ class DDPGAgent(BaseAgent):
                     self.logger.store(TrainEpRet=info['episode']['r'])
         self.replay.add_batch(experiences)
 
-
-        ## Upate
         if self.total_steps > cfg.exploration_steps:
-            experiences = self.replay.sample()
-            states, actions, rewards, next_states, terminals = experiences
-            states = states.float()
-            next_states = next_states.float()
-            actions = actions.float()
-            terminals = terminals.float().view(-1, 1)
-            rewards = rewards.float().view(-1, 1)
+            self.update()
+
+    def update(self):
+        ## Upate
+        experiences = self.replay.sample()
+        states, actions, rewards, next_states, terminals = experiences
+        states = states.float()
+        next_states = next_states.float()
+        actions = actions.float()
+        terminals = terminals.float().view(-1, 1)
+        rewards = rewards.float().view(-1, 1)
 
 
-            target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
-            target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
-            current_q = self.network.action_value(states, actions)
-            value_loss = F.mse_loss(current_q, target_q)
-            self.critic_optimizer.zero_grad()
-            value_loss.backward()
-            self.critic_optimizer.step()
+        target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
+        target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
+        current_q = self.network.action_value(states, actions)
+        value_loss = F.mse_loss(current_q, target_q)
+        self.critic_optimizer.zero_grad()
+        value_loss.backward()
+        self.critic_optimizer.step()
 
-            policy_loss = self.network.action_value(states, self.network.p(states)).mean().neg()
-            self.actor_optimizer.zero_grad()
-            policy_loss.backward()
-            self.actor_optimizer.step()
+        policy_loss = self.network.action_value(states, self.network.p(states)).mean().neg()
+        self.actor_optimizer.zero_grad()
+        policy_loss.backward()
+        self.actor_optimizer.step()
 
-            for param, target_param in zip(self.network.parameters(), self.target_network.parameters()):
-                target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
+        for param, target_param in zip(self.network.parameters(), self.target_network.parameters()):
+            target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
 
-            kwargs = {
-                'Loss': 0,
-                'VLoss': value_loss.item(),
-                'PLoss': policy_loss.item(),
-                'Entropy': None,
-            }
-            self.logger.store(**kwargs)
+        kwargs = {
+            'Loss': 0,
+            'VLoss': value_loss.item(),
+            'PLoss': policy_loss.item(),
+            'Entropy': None,
+        }
+        self.logger.store(**kwargs)
 
     def run(self):
 

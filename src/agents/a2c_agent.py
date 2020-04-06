@@ -50,14 +50,14 @@ class A2CAgent(BaseAgent):
             self.state_normalizer = lambda x: x
             self.action_store_dim = self.envs.action_space.shape[0]
         else:
-            raise NotImplementedError("No such environment")
+            raise NotImplementedError
 
         if cfg.optimizer == 'rmsprop':
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
         else:
-            raise NotImplementedError(f'No such optimizer {cfg.optimizer}')
+            raise NotImplementedError
 
         if cfg.use_lr_decay:
             scheduler = lambda step : 1 - step * cfg.num_processes * cfg.mini_steps / cfg.max_steps
@@ -105,7 +105,7 @@ class A2CAgent(BaseAgent):
             actions = actions.clamp(-self.action_high, self.action_high)
             action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
         else:
-            raise NotImplementedError('No such action space')
+            raise NotImplementedError
 
         return actions, action_log_probs
 
@@ -161,6 +161,8 @@ class A2CAgent(BaseAgent):
 
                 delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
                 rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]) * rollouts.badmasks[step + 1]
+
+        self.update()
 
 
     def sample(self, mini_batch_size=None):
@@ -237,7 +239,6 @@ class A2CAgent(BaseAgent):
 
         while self.total_steps < cfg.max_steps:
             self.step()
-            self.update()
 
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)

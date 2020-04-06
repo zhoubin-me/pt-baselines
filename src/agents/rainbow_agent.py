@@ -164,62 +164,66 @@ class RainbowAgent(BaseAgent):
                         self.logger.store(TrainEpRet=info['episode']['r'])
 
         self.replay.add_batch(experiences)
-
-        ## Upate
         if self.total_steps > cfg.exploration_steps:
-            beta = self.beta_schedule(cfg.sgd_update_frequency)
-            experiences = self.replay.sample(beta=beta)
-            states, actions, rewards, next_states, terminals, *extras = experiences
-            states = self.state_normalizer(states.float())
-            next_states = self.state_normalizer(next_states.float())
-            actions = actions.long()
+            self.update()
 
 
-            with torch.no_grad():
-                prob_next, _ = self.target_network(next_states)
-                if cfg.double:
-                    prob_next_online, _ = self.network(next_states)
-                    actions_next = prob_next_online.mul(self.atoms).sum(dim=-1).argmax(dim=-1)
-                else:
-                    actions_next = prob_next.mul(self.atoms).sum(dim=-1).argmax(dim=-1)
-                prob_next = prob_next[self.batch_indices, actions_next, :]
+    def update(self):
+        cfg = self.cfg
+        ## Upate
+        beta = self.beta_schedule(cfg.sgd_update_frequency)
+        experiences = self.replay.sample(beta=beta)
+        states, actions, rewards, next_states, terminals, *extras = experiences
+        states = self.state_normalizer(states.float())
+        next_states = self.state_normalizer(next_states.float())
+        actions = actions.long()
 
-                rewards = rewards.float().unsqueeze(-1)
-                terminals = terminals.float().unsqueeze(-1)
-                atoms_next = rewards + (cfg.discount ** cfg.nstep) * (1 - terminals) * self.atoms.view(1, -1)
 
-                atoms_next.clamp_(cfg.v_min, cfg.v_max)
-                b = (atoms_next - cfg.v_min) / self.delta_atom
-
-                l, u = b.floor().long(), b.ceil().long()
-                l[(u > 0) * (l == u)] -= 1
-                u[(l < (cfg.num_atoms - 1)) * (l == u)] += 1
-
-                target_prob = torch.zeros_like(prob_next)
-                offset = torch.linspace(0, ((cfg.batch_size - 1) * cfg.num_atoms), cfg.batch_size)
-                offset = offset.unsqueeze(1).expand(cfg.batch_size, cfg.num_atoms).long().to(self.device)
-
-                target_prob.view(-1).index_add_(0, (l + offset).view(-1), (prob_next * (u.float() - b)).view(-1))
-                target_prob.view(-1).index_add_(0, (u + offset).view(-1), (prob_next * (b - l.float())).view(-1))
-
-            _, log_prob = self.network(states)
-            log_prob = log_prob[self.batch_indices, actions, :]
-            error = 0 - target_prob.mul_(log_prob).sum(dim=-1)
-
-            if cfg.prioritize:
-                weights, idxes = extras
-                idxes = idxes.int().flatten().tolist()
-                prioritise = (error+1e-8).flatten().tolist()
-                self.replay.update_priorities(idxes, prioritise)
-                loss = (error * weights.float()).mean()
+        with torch.no_grad():
+            prob_next, _ = self.target_network(next_states)
+            if cfg.double:
+                prob_next_online, _ = self.network(next_states)
+                actions_next = prob_next_online.mul(self.atoms).sum(dim=-1).argmax(dim=-1)
             else:
-                loss = error.mean()
+                actions_next = prob_next.mul(self.atoms).sum(dim=-1).argmax(dim=-1)
+            prob_next = prob_next[self.batch_indices, actions_next, :]
 
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+            rewards = rewards.float().unsqueeze(-1)
+            terminals = terminals.float().unsqueeze(-1)
+            atoms_next = rewards + (cfg.discount ** cfg.nstep) * (1 - terminals) * self.atoms.view(1, -1)
 
-            self.logger.store(Loss=loss.item())
+            atoms_next.clamp_(cfg.v_min, cfg.v_max)
+            b = (atoms_next - cfg.v_min) / self.delta_atom
+
+            l, u = b.floor().long(), b.ceil().long()
+            l[(u > 0) * (l == u)] -= 1
+            u[(l < (cfg.num_atoms - 1)) * (l == u)] += 1
+
+            target_prob = torch.zeros_like(prob_next)
+            offset = torch.linspace(0, ((cfg.batch_size - 1) * cfg.num_atoms), cfg.batch_size)
+            offset = offset.unsqueeze(1).expand(cfg.batch_size, cfg.num_atoms).long().to(self.device)
+
+            target_prob.view(-1).index_add_(0, (l + offset).view(-1), (prob_next * (u.float() - b)).view(-1))
+            target_prob.view(-1).index_add_(0, (u + offset).view(-1), (prob_next * (b - l.float())).view(-1))
+
+        _, log_prob = self.network(states)
+        log_prob = log_prob[self.batch_indices, actions, :]
+        error = 0 - target_prob.mul_(log_prob).sum(dim=-1)
+
+        if cfg.prioritize:
+            weights, idxes = extras
+            idxes = idxes.int().flatten().tolist()
+            prioritise = (error+1e-8).flatten().tolist()
+            self.replay.update_priorities(idxes, prioritise)
+            loss = (error * weights.float()).mean()
+        else:
+            loss = error.mean()
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self.logger.store(Loss=loss.item())
 
         if self.total_steps % cfg.target_network_update_freq == 0:
             self.target_network.load_state_dict(self.network.state_dict())

@@ -66,3 +66,6 @@ class BaseAgent:
             episodic_returns.append(np.sum(total_rewards))
         self.network.train()
         return episodic_returns
+
+    def run(self):
+        raise NotImplementedError
