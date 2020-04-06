@@ -34,9 +34,7 @@ def main(**kwargs):
     else:
         random_seed(args.seed)
 
-    if args.algo == 'A3C' or args.algo == 'Rainbow':
-        set_thread(1)
-
+    set_thread(1)
 
     mkdir(args.log_dir)
     agent = eval(f'{args.algo}Agent(cfg=args)')
