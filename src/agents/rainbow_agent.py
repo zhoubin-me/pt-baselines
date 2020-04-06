@@ -164,11 +164,12 @@ class RainbowAgent(BaseAgent):
                         self.logger.store(TrainEpRet=info['episode']['r'])
 
         self.replay.add_batch(experiences)
-        if self.total_steps > cfg.exploration_steps:
-            self.update()
 
     def update(self):
         cfg = self.cfg
+        if self.total_steps < cfg.exploration_steps:
+            return
+
         beta = self.beta_schedule(cfg.sgd_update_frequency)
         experiences = self.replay.sample(beta=beta)
         states, actions, rewards, next_states, terminals, *extras = experiences
@@ -237,6 +238,7 @@ class RainbowAgent(BaseAgent):
 
         while self.total_steps < cfg.max_steps:
             self.step()
+            self.update()
 
             if self.total_steps % cfg.log_interval == 0:
                 logger.log_tabular('TotalEnvInteracts', self.total_steps)
