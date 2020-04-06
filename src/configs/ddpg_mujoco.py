@@ -11,8 +11,10 @@ class Config:
     num_processes = 1
     buffer_size = int(1e6)
     batch_size = 256
+    sgd_update_frequency = 1
 
     max_steps = int(1e6)
+    exploration_steps = 25000
     log_interval = 5000
     eval_episodes = 10
     save_interval = int(1e5)
@@ -23,6 +25,7 @@ class Config:
     gamma = 0.99
     p_lr = 3e-4
     v_lr = 3e-4
+    tau = 0.005
 
     # Others
     ckpt = ""

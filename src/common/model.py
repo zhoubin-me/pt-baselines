@@ -16,7 +16,7 @@ class DDPGMLP(nn.Module):
 
         self.v = nn.Sequential(
             nn.Linear(num_inputs + action_dim, 64), nn.Tanh(),
-            nn.Linear(64, 64 + action_dim), nn.Tanh(),
+            nn.Linear(64, 64), nn.Tanh(),
             nn.Linear(64, 1)
         )
 
