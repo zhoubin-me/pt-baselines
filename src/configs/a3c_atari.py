@@ -5,6 +5,7 @@ class Config:
     game = 'Pong'
     algo = 'A3C'
     seed = 0
+    device_id = -1
 
     # Number of parallel threads
     num_actors = 16
