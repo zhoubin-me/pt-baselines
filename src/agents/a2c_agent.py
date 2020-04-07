@@ -154,7 +154,8 @@ class A2CAgent(BaseAgent):
                     self.logger.store(TrainEpRet=info['episode']['r'])
 
         # Compute R and GAE
-        v_next, _ = self.network(self.rollouts.obs[-1])
+        with torch.no_grad():
+            v_next, _ = self.network(self.rollouts.obs[-1])
 
         rollouts.values[-1].copy_(v_next)
         rollouts.returns[-1].copy_(v_next)
