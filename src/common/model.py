@@ -11,7 +11,7 @@ def init(m, gain=1.0):
         nn.init.zeros_(m.bias.data)
 
 class TD3MLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=512):
+    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
         super(TD3MLP, self).__init__()
         self.max_action = max_action
         self.v = nn.Sequential(
@@ -49,7 +49,7 @@ class TD3MLP(nn.Module):
         return chain(self.v.parameters(), self.v2.parameters())
 
 class DDPGMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=512):
+    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
         super(DDPGMLP, self).__init__()
 
         self.max_action = max_action
@@ -116,20 +116,20 @@ class SepBodyConv(nn.Module):
 
 
 class SepBodyMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action):
+    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
         super(SepBodyMLP, self).__init__()
 
         self.max_action = max_action
         self.v = nn.Sequential(
-            nn.Linear(num_inputs, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, 1)
+            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, 1)
         )
 
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, action_dim), nn.Tanh()
+            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, action_dim), nn.Tanh()
         )
 
         self.apply(lambda m: init(m, np.sqrt(2)))
@@ -148,17 +148,17 @@ class SepBodyMLP(nn.Module):
 
 
 class MLPNet(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action):
+    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
         super(MLPNet, self).__init__()
 
         self.max_action = max_action
         self.mlps = nn.Sequential(
-            nn.Linear(num_inputs, 64), nn.Tanh(),
-            nn.Linear(64, 64), nn.Tanh(),
+            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
         )
 
-        self.v = nn.Linear(64, 1)
-        self.p = nn.Linear(64, action_dim)
+        self.v = nn.Linear(hidden_size, 1)
+        self.p = nn.Linear(hidden_size, action_dim)
 
         self.apply(lambda m: init(m, np.sqrt(2)))
         self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)

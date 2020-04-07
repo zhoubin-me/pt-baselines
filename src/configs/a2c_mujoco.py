@@ -33,6 +33,7 @@ class Config:
     max_grad_norm = 0.5
 
     # Others
+    hidden_size = 256
     ckpt = ""
     log_dir = ""
     play = False

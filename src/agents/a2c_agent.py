@@ -41,7 +41,7 @@ class A2CAgent(BaseAgent):
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
         elif len(self.envs.observation_space.shape) == 1:
-            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0], self.action_high).to(self.device)
+            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0], self.action_high, cfg.hidden_size).to(self.device)
             self.reward_normalizer = lambda x: x
             self.state_normalizer = lambda x: x
             self.action_store_dim = self.envs.action_space.shape[0]

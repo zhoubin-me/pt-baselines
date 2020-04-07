@@ -36,6 +36,7 @@ class Config:
 
 
     # Others
+    hidden_size = 256
     ckpt = ""
     log_dir = ""
     play = False

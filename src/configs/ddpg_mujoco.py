@@ -29,6 +29,7 @@ class Config:
     tau = 0.005
 
     # Others
+    hidden_size = 256
     ckpt = ""
     log_dir = ""
     play = False

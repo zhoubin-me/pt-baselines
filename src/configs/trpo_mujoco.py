@@ -41,6 +41,7 @@ class Config:
     clip_param = 0.1
 
     # Others
+    hidden_size = 256
     ckpt = ""
     log_dir = ""
     play = False

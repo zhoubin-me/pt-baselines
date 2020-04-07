@@ -68,9 +68,9 @@ class DDPGAgent(BaseAgent):
         )
 
         if cfg.algo == 'DDPG':
-            self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high).to(self.device)
+            self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high, cfg.hidden_size).to(self.device)
         elif cfg.algo == 'TD3':
-            self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high).to(self.device)
+            self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high, cfg.hidden_size).to(self.device)
         else:
             raise NotImplementedError
 
