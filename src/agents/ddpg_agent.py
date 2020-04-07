@@ -59,7 +59,6 @@ class DDPGAgent(BaseAgent):
         self.actor = DDPGActor(cfg, self.lock, cfg.device_id)
         self.test_env = make_bullet_env(cfg.game, cfg.log_dir + '/test', seed=cfg.seed + 1)()
         self.action_high = self.test_env.action_space.high[0]
-        self.noise_std = torch.tensor(self.cfg.action_noise_level * self.action_high).to(self.device)
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.replay = AsyncReplayBuffer(
@@ -85,7 +84,7 @@ class DDPGAgent(BaseAgent):
         self.critic_optimizer = torch.optim.Adam(self.network.get_value_params(), lr=cfg.v_lr)
 
         self.total_steps = 0
-        self.max_action = float(self.test_env.action_space.high[0])
+        self.noise_std = torch.tensor(self.cfg.action_noise_level * self.action_high).to(self.device)
 
     def close(self):
         close_obj(self.replay)
