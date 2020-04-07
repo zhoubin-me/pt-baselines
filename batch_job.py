@@ -9,7 +9,7 @@ from run import main
 
 cfgs = glob.glob('src/configs/*.py')
 q = JoinableQueue()
-NUM_THREADS = 40
+NUM_THREADS = 50
 
 def run_single_config(queue):
     while True:
@@ -28,9 +28,12 @@ for i in range(NUM_THREADS):
 
 for seed in [1, 2, 3, 4, 5]:
     for cfg in cfgs:
-        if 'mujoco' in cfg:
+        if 'ppo_' in cfg or 'trpo_' in cfg:
             pass
         else:
+            continue
+
+        if 'mujoco' not in cfg:
             continue
 
         for game in _mujoco7:

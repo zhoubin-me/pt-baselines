@@ -18,21 +18,20 @@ def plot(stage='train'):
     else:
         files = glob.glob('log/*/val.txt')
 
-    print(files)
+    sorted(files)
 
     figs = {}
     colors = Category20[20]
     algos = []
 
-    for idx, file in enumerate(files):
-        if 'A2C' in file:
-            continue
-        with open(file, 'r') as f:
+    for idx, fname in enumerate(files):
+        with open(fname, 'r') as f:
             try:
-                data = pd.read_table(f)
+                data = pd.read_table(f, sep='\t\t', engine='python')
             except:
                 continue
-            title = file.strip().split('/')[1]
+            print('Plotting ', fname)
+            title = fname.strip().split('/')[1]
             algo, game, seed = title.split('-')
             algo_seed = algo + seed
             if algo_seed not in algos:
@@ -49,8 +48,16 @@ def plot(stage='train'):
                         continue
                     key = 'TotalEnvInteracts' if stage == 'train' else 'Steps'
 
+                    tooltips = [
+                        ('index', '$index'),
+                        (key, '$x'),
+                        (col, '$y'),
+                        ('Title', title)
+                    ]
+
+
                     if col not in figs[game]:
-                        figs[game][col] = figure(width=800, height=600, title=col)
+                        figs[game][col] = figure(width=800, height=600, title=col, tools='hover, wheel_zoom, reset', tooltips=tooltips)
 
                     fig = figs[game][col]
                     fig.circle(data[key].values, data[col].values, legend=title, fill_color=color, color=color)

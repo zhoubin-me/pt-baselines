@@ -20,7 +20,7 @@ class Config:
     use_lr_decay = False
 
     # Optimizer related
-    optimizer = 'kfac'
+    optimizer = 'adam'
     gamma = 0.99
     lr = 2.5e-4
     eps = 1e-5
