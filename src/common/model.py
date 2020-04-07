@@ -33,8 +33,6 @@ class TD3MLP(nn.Module):
             nn.Linear(hidden_size, action_dim)
         )
 
-        self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
-
         self.apply(lambda m: init(m, np.sqrt(2)))
 
     def forward(self, x):
@@ -45,39 +43,38 @@ class TD3MLP(nn.Module):
         return self.v(x), self.v2(x)
 
     def get_policy_params(self):
-        return chain(self.p.parameters(), iter([self.p_log_std]))
+        return self.p.parameters()
 
     def get_value_params(self):
         return chain(self.v.parameters(), self.v2.parameters())
 
 class DDPGMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, hidden_size=512):
+    def __init__(self, num_inputs, action_dim, max_action, hidden_size=512):
         super(DDPGMLP, self).__init__()
 
+        self.max_action = max_action
         self.v = nn.Sequential(
             nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, 1)
+            nn.Linear(hidden_size, 1), nn.Tanh(),
         )
 
         self.p = nn.Sequential(
             nn.Linear(num_inputs, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, action_dim)
+            nn.Linear(hidden_size, action_dim), nn.Tanh()
         )
-
-        self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
 
         self.apply(lambda m: init(m, np.sqrt(2)))
 
-    def forward(self, x):
-        return 0, self.p(x)
+    def act(self, x):
+        return self.p(x) * self.max_action
 
     def action_value(self, state, action):
         return self.v(torch.cat([state, action], dim=1))
 
     def get_policy_params(self):
-        return chain(self.p.parameters(), iter([self.p_log_std]))
+        return self.p.parameters()
 
     def get_value_params(self):
         return self.v.parameters()

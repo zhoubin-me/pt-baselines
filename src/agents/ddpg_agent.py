@@ -10,7 +10,7 @@ from src.common.async_replay import AsyncReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
 from src.common.model import DDPGMLP, TD3MLP
-from src.common.utils import close_obj
+from src.common.utils import close_obj, tensor
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
 
@@ -27,6 +27,7 @@ class DDPGActor(AsyncActor):
         self._device = torch.device(f'cuda:{self.device_id}') if self.device_id >= 0 else torch.device('cpu')
         self._env = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
         self._action_high = self._env.action_space.high[0]
+        self._noise_std = torch.tensor(self.cfg.noise_level * self._action_high).to(self._device)
 
     def _transition(self):
         if self._state is None:
@@ -36,12 +37,10 @@ class DDPGActor(AsyncActor):
         if self._total_steps < self.cfg.exploration_steps:
             action = self._env.action_space.sample()
         else:
-            state = torch.from_numpy(self._state).float().to(self._device).unsqueeze(0)
-            pi = self._network.p(state)
-            dist = Normal(pi, self._network.p_log_std.expand_as(pi).exp())
-            action = dist.sample()
-            action = action.clamp(-self._action_high, self._action_high)
-            action = action.squeeze(0).cpu().numpy()
+            state = tensor(self._state).float().to(self._device).unsqueeze(0)
+            action_mean = self._network.act(state)
+            dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
+            action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
 
         next_state, reward, done, info = self._env.step(action)
         entry = [self._state, action, reward, next_state, int(done), info]
@@ -69,7 +68,7 @@ class DDPGAgent(BaseAgent):
         )
 
         if cfg.algo == 'DDPG':
-            self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
+            self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high).to(self.device)
         elif cfg.algo == 'TD3':
             self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
         else:
@@ -92,11 +91,8 @@ class DDPGAgent(BaseAgent):
         close_obj(self.actor)
 
     def eval_step(self):
-        state = torch.from_numpy(self.test_state).float().to(self.device).unsqueeze(0)
-        pi = self.network.p(state)
-        dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
-        action = dist.sample()
-        action = action.clamp(-self.action_high, self.action_high)
+        state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
+        action = self.network.act(state)
         return action.squeeze(0).cpu().numpy()
 
     def step(self):
@@ -135,7 +131,7 @@ class DDPGAgent(BaseAgent):
         value_loss.backward()
         self.critic_optimizer.step()
 
-        policy_loss = self.network.action_value(states, self.network.p(states)).mean().neg()
+        policy_loss = self.network.action_value(states, self.network.act(states)).mean().neg()
         self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()

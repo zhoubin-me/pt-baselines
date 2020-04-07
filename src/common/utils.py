@@ -14,11 +14,11 @@ def sync_rms(master_env, slave_env):
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
 
-def tensor(x, device):
+def tensor(x):
     if isinstance(x, torch.Tensor):
         return x
     x = np.asarray(x, dtype=np.float)
-    x = torch.tensor(x, dtype=torch.float32, device=device)
+    x = torch.tensor(x, dtype=torch.float32)
     return x
 
 def close_obj(obj):
