@@ -11,10 +11,9 @@ cfgs = glob.glob('src/configs/*.py')
 seed = 1
 for cfg in cfgs:
     exps = [
-        'a2c_atari', 'a3c_mujoco',
+        'a2c_atari', 'a2c_mujoco',
         'a3c_atari',
     ]
-
 
     if not any(map(lambda x: x in cfg, exps)):
         continue
