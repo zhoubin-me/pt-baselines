@@ -37,3 +37,26 @@ for seed in [1, 2, 3]:
         for game in _mujoco7:
             q.put((cfg, game, seed))
 q.join()
+
+
+seed = 1
+for cfg in cfgs:
+
+    exps = [
+        'ppo_atari', 'trpo_atari',
+        'ddpg_mujoco', 'td3_mujoco',
+        'rainbow_atari'
+    ]
+
+    if not any(map(lambda x: x in cfg, exps)):
+        continue
+
+    if 'mujoco' in cfg:
+        games = _mujoco7
+    else:
+        games = _atari7
+
+    for i, game in enumerate(games):
+        hold_on = " " if game == games[-1] else "&"
+        device_id = -1 if 'mujoco' in cfg else i
+        os.system(f'python run.py {cfg} --game {game} --seed {seed} --device_id {i} {hold_on}')
