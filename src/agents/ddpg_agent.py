@@ -5,11 +5,11 @@ from torch.distributions import Normal
 import copy
 import time
 import numpy as np
-
+from gym.spaces import Box, Discrete
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
-from src.common.model import DDPGMLP, TD3MLP, SACMLP
+from src.common.model import DDPGMLP, TD3MLP
 from src.common.utils import close_obj, tensor
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
@@ -27,7 +27,8 @@ class DDPGActor(AsyncActor):
         self._device = torch.device(f'cuda:{self.device_id}') if self.device_id >= 0 else torch.device('cpu')
         self._env = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
         self._action_high = self._env.action_space.high[0]
-        self._noise_std = torch.tensor(self.cfg.action_noise_level * self._action_high).to(self._device)
+        self._noise_std = torch.tensor(self.cfg.action_noise_level).to(self._device)
+
 
     def _transition(self):
         if self._state is None:
@@ -38,9 +39,16 @@ class DDPGActor(AsyncActor):
             action = self._env.action_space.sample()
         else:
             state = tensor(self._state).float().to(self._device).unsqueeze(0)
-            action_mean = self._network.act(state)
-            dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
-            action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
+
+            if isinstance(self._env.action_space, Box):
+                action_mean, action_std = self._network.act(state)
+                if action_std == 0:
+                    action_std = self._noise_std.expand_as(action_mean)
+            else:
+                raise NotImplementedError
+
+            dist = Normal(action_mean, action_std)
+            action = (dist.sample().tanh() * self._action_high).squeeze(0).cpu().numpy()
 
         next_state, reward, done, info = self._env.step(action)
         entry = [self._state, action, reward, next_state, int(done), info]
@@ -79,15 +87,12 @@ class DDPGAgent(BaseAgent):
 
         if cfg.algo == 'DDPG':
             NET = DDPGMLP
-        elif cfg.algo == 'TD3':
+        elif cfg.algo == 'TD3' or cfg.algo == 'SAC':
             NET = TD3MLP
-        elif cfg.algo == 'SAC':
-            NET = SACMLP
         else:
             raise NotImplementedError
 
-        self.network = NET(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0],
-                           self.action_high, cfg.hidden_size).to(self.device)
+        self.network = NET(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], cfg.hidden_size).to(self.device)
         self.network.train()
         self.network.share_memory()
         self.target_network = copy.deepcopy(self.network)
@@ -98,7 +103,7 @@ class DDPGAgent(BaseAgent):
         self.critic_optimizer = torch.optim.Adam(self.network.get_value_params(), lr=cfg.v_lr)
 
         self.total_steps = 0
-        self.noise_std = torch.tensor(self.cfg.action_noise_level * self.action_high).to(self.device)
+        self.noise_std = torch.tensor(self.cfg.action_noise_level).to(self.device)
 
     def close(self):
         close_obj(self.replay)
@@ -106,7 +111,8 @@ class DDPGAgent(BaseAgent):
 
     def eval_step(self):
         state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
-        action = self.network.act(state)
+        action_mean, action_std = self.network.act(state)
+        action = action_mean.tanh() * self.action_high
         return action.squeeze(0).cpu().numpy()
 
     def step(self):
@@ -139,7 +145,11 @@ class DDPGAgent(BaseAgent):
         rewards = rewards.float().view(-1, 1)
 
         with torch.no_grad():
-            target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
+            action_mean, _ = self.target_network.act(next_states)
+            dist = Normal(action_mean, self.noise_std.expand_as(action_mean))
+            next_actions = dist.sample().tanh() * self.action_high
+
+            target_q = self.target_network.action_value(next_states, next_actions)
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
 
         current_q = self.network.action_value(states, actions)
@@ -148,7 +158,7 @@ class DDPGAgent(BaseAgent):
         value_loss.backward()
         self.critic_optimizer.step()
 
-        policy_loss = self.network.action_value(states, self.network.act(states)).mean().neg()
+        policy_loss = self.network.action_value(states, self.network.p(states).tanh() * self.action_high).mean().neg()
         self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()

@@ -13,11 +13,8 @@ def init(m, gain=1.0):
 class SACMLP(nn.Module):
     LOG_STD_MAX = 2
     LOG_STD_MIN = -20
-    eps = 1e-6
-
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
+    def __init__(self, num_inputs, action_dim, hidden_size=256):
         super(SACMLP, self).__init__()
-        self.max_action = max_action
         self.v = nn.Sequential(
             nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
@@ -40,17 +37,8 @@ class SACMLP(nn.Module):
         self.apply(lambda m: init(m, np.sqrt(2)))
 
     def act(self, x):
-        action_mean, action_log_std = torch.chunk(self.p(x), 2, dim=-1)
-        action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
-        dist = Normal(action_mean, action_log_std.exp())
-
-        xs = dist.sample()
-        action = xs.tanh() * self.max_action
-
-        action_log_prob = dist.log_prob(xs) - torch.log(1 - action.pow(2) + self.eps)
-        entropy = action_log_prob.sum(-1, keepdim=True).neg()
-
-        return action, entropy, action_mean.tanh() * self.max_action
+        action_mean, action_std_log = torch.chunk(self.p(x), 2, dim=-1)
+        return action_mean, action_std_log.exp()
 
     def action_value(self, state, action):
         x = torch.cat([state, action], dim=1)
@@ -62,10 +50,12 @@ class SACMLP(nn.Module):
     def get_value_params(self):
         return chain(self.v.parameters(), self.v2.parameters())
 
+
 class TD3MLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
+    LOG_STD_MAX = 2
+    LOG_STD_MIN = -20
+    def __init__(self, num_inputs, action_dim, hidden_size=256):
         super(TD3MLP, self).__init__()
-        self.max_action = max_action
         self.v = nn.Sequential(
             nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
@@ -82,13 +72,13 @@ class TD3MLP(nn.Module):
         self.p = nn.Sequential(
             nn.Linear(num_inputs, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, action_dim), nn.Tanh()
+            nn.Linear(hidden_size, action_dim)
         )
 
         self.apply(lambda m: init(m, np.sqrt(2)))
 
     def act(self, x):
-        return self.p(x) * self.max_action
+        return self.p(x), 0
 
     def action_value(self, state, action):
         x = torch.cat([state, action], dim=1)
@@ -101,10 +91,11 @@ class TD3MLP(nn.Module):
         return chain(self.v.parameters(), self.v2.parameters())
 
 class DDPGMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
+    LOG_STD_MAX = 2
+    LOG_STD_MIN = -20
+    def __init__(self, num_inputs, action_dim, hidden_size=256):
         super(DDPGMLP, self).__init__()
 
-        self.max_action = max_action
         self.v = nn.Sequential(
             nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
@@ -114,13 +105,14 @@ class DDPGMLP(nn.Module):
         self.p = nn.Sequential(
             nn.Linear(num_inputs, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, action_dim), nn.Tanh()
+            nn.Linear(hidden_size, action_dim)
         )
+
 
         self.apply(lambda m: init(m, np.sqrt(2)))
 
     def act(self, x):
-        return self.p(x) * self.max_action
+        return self.p(x), 0
 
     def action_value(self, state, action):
         return self.v(torch.cat([state, action], dim=1))
@@ -168,10 +160,11 @@ class SepBodyConv(nn.Module):
 
 
 class SepBodyMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
+    LOG_STD_MAX = 2
+    LOG_STD_MIN = -20
+    def __init__(self, num_inputs, action_dim, hidden_size=256):
         super(SepBodyMLP, self).__init__()
 
-        self.max_action = max_action
         self.v = nn.Sequential(
             nn.Linear(num_inputs, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
@@ -181,16 +174,23 @@ class SepBodyMLP(nn.Module):
         self.p = nn.Sequential(
             nn.Linear(num_inputs, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, action_dim), nn.Tanh()
+            nn.Linear(hidden_size, action_dim * 2)
         )
 
         self.apply(lambda m: init(m, np.sqrt(2)))
         self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
 
+    def act(self, x):
+        action_mean, action_log_std = torch.chunk(self.p(x), 2, dim=-1)
+        action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
+        return action_mean, action_log_std.exp()
+
     def forward(self, x):
         values = self.v(x)
-        logits = self.p(x) * self.max_action
-        return values, logits
+        logits = self.p(x)
+        action_mean, action_log_std = torch.chunk(logits, 2, dim=-1)
+        action_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX).exp()
+        return values, (action_mean, action_std)
 
     def get_policy_params(self):
         return chain(self.p.parameters(), iter([self.p_log_std]))
@@ -200,26 +200,34 @@ class SepBodyMLP(nn.Module):
 
 
 class MLPNet(nn.Module):
-    def __init__(self, num_inputs, action_dim, max_action, hidden_size=256):
+    LOG_STD_MAX = 2
+    LOG_STD_MIN = -20
+    def __init__(self, num_inputs, action_dim, hidden_size=256):
         super(MLPNet, self).__init__()
 
-        self.max_action = max_action
         self.mlps = nn.Sequential(
             nn.Linear(num_inputs, hidden_size), nn.Tanh(),
             nn.Linear(hidden_size, hidden_size), nn.Tanh(),
         )
 
         self.v = nn.Linear(hidden_size, 1)
-        self.p = nn.Linear(hidden_size, action_dim)
+        self.p = nn.Linear(hidden_size, action_dim * 2)
 
         self.apply(lambda m: init(m, np.sqrt(2)))
         self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
 
+    def act(self, x):
+        action_mean, action_log_std = torch.chunk(self.p(x), 2, dim=-1)
+        action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
+        return action_mean, action_log_std.exp()
+
     def forward(self, x):
         features = self.mlps(x)
         values = self.v(features)
-        logits = self.p(features).tanh() * self.max_action
-        return values, logits
+        logits = self.p(features)
+        action_mean, action_log_std = torch.chunk(logits, 2, dim=-1)
+        action_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX).exp()
+        return values, (action_mean, action_std)
 
 
 class ConvNet(nn.Module):

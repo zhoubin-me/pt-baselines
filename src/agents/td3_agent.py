@@ -20,9 +20,9 @@ class TD3Agent(DDPGAgent):
         rewards = rewards.float().view(-1, 1)
 
         with torch.no_grad():
-            next_actions_mean = self.target_network.act(next_states)
-            dist = Normal(next_actions_mean, self.noise_std.expand_as(next_actions_mean))
-            next_actions = dist.sample().clamp(-self.action_high, self.action_high)
+            action_mean, _ = self.target_network.act(next_states)
+            dist = Normal(action_mean, self.noise_std.expand_as(action_mean))
+            next_actions = dist.sample().tanh() * self.action_high
             target_q1, target_q2 = self.target_network.action_value(next_states, next_actions)
             target_q = torch.min(target_q1, target_q2)
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
@@ -36,7 +36,8 @@ class TD3Agent(DDPGAgent):
         self.critic_optimizer.step()
 
         if self.total_steps % cfg.policy_update_freq == 0:
-            policy_loss = self.network.v(torch.cat([states, self.network.p(states)], dim=1)).mean().neg()
+            current_action =  self.network.p(states).tanh() * self.action_high
+            policy_loss = self.network.v(torch.cat([states, current_action], dim=1)).mean().neg()
             self.actor_optimizer.zero_grad()
             policy_loss.backward()
             self.actor_optimizer.step()

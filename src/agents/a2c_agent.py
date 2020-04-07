@@ -41,7 +41,7 @@ class A2CAgent(BaseAgent):
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
         elif len(self.envs.observation_space.shape) == 1:
-            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0], self.action_high, cfg.hidden_size).to(self.device)
+            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0], cfg.hidden_size).to(self.device)
             self.reward_normalizer = lambda x: x
             self.state_normalizer = lambda x: x
             self.action_store_dim = self.envs.action_space.shape[0]
@@ -85,13 +85,14 @@ class A2CAgent(BaseAgent):
 
 
     def eval_step(self):
-        v, pi = self.network(self.state_normalizer(self.test_state))
+        pi = self.network.act(self.state_normalizer(self.test_state))
         if isinstance(self.envs.action_space, Discrete):
             dist = Categorical(logits=pi)
             action = dist.sample()
         elif isinstance(self.envs.action_space, Box):
-            dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
-            action = dist.sample().clamp(-self.action_high, self.action_high)
+            action_mean, action_std = pi
+            dist = Normal(action_mean, action_std)
+            action = dist.sample().tanh() * self.action_high
         else:
             raise NotImplementedError('No such action space')
         return action
@@ -105,9 +106,11 @@ class A2CAgent(BaseAgent):
             action_log_probs = action_log_probs.unsqueeze(-1)
 
         elif isinstance(self.envs.action_space, Box):
-            dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-            actions = dist.sample().clamp(-self.action_high, self.action_high)
+            action_mean, action_std = pis
+            dist = Normal(action_mean, action_std)
+            actions = dist.sample().tanh() * self.action_high
             action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
+            actions = actions.tanh() * self.action_high
         else:
             raise NotImplementedError('No such action space')
 
@@ -197,14 +200,20 @@ class A2CAgent(BaseAgent):
             adv_batch = advs[indices]
             yield obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch
 
+    @staticmethod
+    def atanh(x):
+        return 0.5 * torch.log((1 + x) / (1 - x))
+
     def pdist(self, pis, action_batch):
         if isinstance(self.envs.action_space, Discrete):
             pdist = Categorical(logits=pis)
             log_prob = pdist.log_prob(action_batch.view(-1)).unsqueeze(-1)
             entropy = pdist.entropy().mean()
         elif isinstance(self.envs.action_space, Box):
-            pdist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-            log_prob = pdist.log_prob(action_batch).sum(-1, keepdim=True)
+            action_mean, action_std = pis
+            pdist = Normal(action_mean, action_std)
+            actions = self.atanh(action_batch / self.action_high)
+            log_prob = pdist.log_prob(actions).sum(-1, keepdim=True)
             entropy = pdist.entropy().sum(-1).mean()
         else:
             raise NotImplementedError('No such action space')

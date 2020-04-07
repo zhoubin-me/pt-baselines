@@ -121,7 +121,7 @@ class TRPOAgent(A2CAgent):
                 def backtrac_fn(s):
                     params_new = params_old + s
                     vector_to_parameters(params_new, self.network.get_policy_params())
-                    pis_new = self.network.p(obs_batch)
+                    pis_new = self.network.act(obs_batch)
 
                     pdist_new, log_prob_new, _ = self.pdist(pis_new, action_batch)
                     policy_loss_neg_new = (adv_batch * (log_prob_new - action_log_prob_batch).exp()).mean()
