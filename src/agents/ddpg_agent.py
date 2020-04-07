@@ -37,10 +37,15 @@ class DDPGActor(AsyncActor):
         if self._total_steps < self.cfg.exploration_steps:
             action = self._env.action_space.sample()
         else:
+
             state = tensor(self._state).float().to(self._device).unsqueeze(0)
-            action_mean = self._network.act(state)
-            dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
-            action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
+            if self.cfg.algo == 'SAC':
+                action, _, _ = self._network.act(state)
+                action = action.squeeze(0).cpu().numpy()
+            else:
+                action_mean = self._network.act(state)
+                dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
+                action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
 
         next_state, reward, done, info = self._env.step(action)
         entry = [self._state, action, reward, next_state, int(done), info]
@@ -106,7 +111,11 @@ class DDPGAgent(BaseAgent):
 
     def eval_step(self):
         state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
-        action = self.network.act(state)
+        if self.cfg.algo == 'SAC':
+            _, _, action = self.network.act(state)
+        else:
+            action = self.network.act(state)
+
         return action.squeeze(0).cpu().numpy()
 
     def step(self):
