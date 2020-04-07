@@ -26,6 +26,7 @@ class A2CAgent(BaseAgent):
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, device=self.device)
         self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
 
+        self.use_badmask = isinstance(self.envs.action_space, Box)
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
         else:
@@ -156,10 +157,18 @@ class A2CAgent(BaseAgent):
             rollouts.gaes[-1].zero_()
 
             for step in reversed(range(cfg.mini_steps)):
-                R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
-                rollouts.returns[step] = R * rollouts.badmasks[step+ 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
-                delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
-                rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]) * rollouts.badmasks[step + 1]
+                if self.use_badmask:
+                    R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
+                    rollouts.returns[step] = R * rollouts.badmasks[step+ 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
+                    delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
+                    gae = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step+1] * rollouts.gaes[step+1]
+                    rollouts.gaes[step] = gae * rollouts.badmasks[step + 1]
+
+                else:
+                    rollouts.returns[step] = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
+                    delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
+                    rollouts.gaes[step] = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]
+
 
         self.update()
 
@@ -209,10 +218,20 @@ class A2CAgent(BaseAgent):
 
                 dist, log_probs, entropy = self.pdist(pis, action_batch)
 
-                value_loss = (value_batch + adv_batch - vs).pow(2).mean()
-                policy_loss = (adv_batch.detach() * log_probs).mean().neg()
-                # value_loss = (vs - return_batch).pow(2).mean()
-                # policy_loss = ((vs - return_batch).detach() * log_probs).mean().neg()
+                # value_loss = (value_batch + adv_batch - vs).pow(2).mean()
+                # policy_loss = (adv_batch.detach() * log_probs).mean().neg()
+
+
+                if isinstance(self.envs.action_space, Box):
+                    value_loss = (value_batch + adv_batch - vs).pow(2).mean()
+                    policy_loss = (adv_batch.detach() * log_probs).mean().neg()
+                elif isinstance(self.envs.action_space, Discrete):
+                    value_loss = (vs - return_batch).pow(2).mean()
+                    policy_loss = ((vs - return_batch).detach() * log_probs).mean().neg()
+                else:
+                    raise NotImplementedError
+
+
 
 
                 if cfg.optimizer == 'kfac' and self.optimizer.steps % self.optimizer.TCov == 0:
