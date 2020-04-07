@@ -21,5 +21,11 @@ for cfg in cfgs:
     else:
         continue
 
-    for game in _mujoco7:
-        os.system(f'python run.py {cfg} --game {game} --seed {seed} & ')
+    if 'rainbow' in cfg:
+        games = _atari7
+    else:
+        games = _mujoco7
+
+    for game in games:
+        hold_on = " " if game == games[-1] else "&"
+        os.system(f'python run.py {cfg} --game {game} --seed {seed} {hold_on}')
