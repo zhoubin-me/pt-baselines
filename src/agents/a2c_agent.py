@@ -130,8 +130,7 @@ class A2CAgent(BaseAgent):
 
             with torch.no_grad():
                 v, pi = self.network(self.rollouts.obs[step])
-
-            actions, action_log_probs = self.act(pi)
+                actions, action_log_probs = self.act(pi)
 
             states, rewards, dones, infos = self.envs.step(actions)
             self.total_steps += cfg.num_processes
