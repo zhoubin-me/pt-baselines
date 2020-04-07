@@ -208,7 +208,7 @@ class RainbowAgent(BaseAgent):
 
         _, log_prob = self.network(states)
         log_prob = log_prob[self.batch_indices, actions, :]
-        error = 0 - target_prob.mul_(log_prob).sum(dim=-1)
+        error = target_prob.mul_(log_prob).sum(dim=-1).neg()
 
         if cfg.prioritize:
             weights, idxes = extras

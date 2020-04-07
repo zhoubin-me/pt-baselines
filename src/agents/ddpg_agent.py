@@ -59,6 +59,7 @@ class DDPGAgent(BaseAgent):
         self.actor = DDPGActor(cfg, self.lock, cfg.device_id)
         self.test_env = make_bullet_env(cfg.game, cfg.log_dir + '/test', seed=cfg.seed + 1)()
         self.action_high = self.test_env.action_space.high[0]
+        self.noise_std = torch.tensor(self.cfg.action_noise_level * self.action_high).to(self.device)
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.replay = AsyncReplayBuffer(
@@ -70,7 +71,7 @@ class DDPGAgent(BaseAgent):
         if cfg.algo == 'DDPG':
             self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high).to(self.device)
         elif cfg.algo == 'TD3':
-            self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0]).to(self.device)
+            self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high).to(self.device)
         else:
             raise NotImplementedError
 

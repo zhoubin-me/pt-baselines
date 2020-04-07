@@ -21,9 +21,9 @@ class TD3Agent(DDPGAgent):
         rewards = rewards.float().view(-1, 1)
 
         with torch.no_grad():
-            dist = Normal(self.target_network.p(next_states), self.network.p_log_std.expand_as(actions).exp())
-            next_actions = dist.sample()
-            next_actions = next_actions.clamp(-self.action_high, self.action_high)
+            next_actions_mean = self.target_network.act(next_states)
+            dist = Normal(next_actions_mean, self.noise_std.expand_as(next_actions_mean))
+            next_actions = dist.sample().clamp(-self.action_high, self.action_high)
             target_q1, target_q2 = self.network.action_value(next_states, next_actions)
             target_q = torch.min(target_q1, target_q2)
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
