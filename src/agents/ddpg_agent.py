@@ -9,7 +9,7 @@ from gym.spaces import Box, Discrete
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
-from src.common.model import DDPGMLP, TD3MLP
+from src.common.model import DDPGMLP, TD3MLP, SACMLP
 from src.common.utils import close_obj, tensor
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
@@ -87,8 +87,10 @@ class DDPGAgent(BaseAgent):
 
         if cfg.algo == 'DDPG':
             NET = DDPGMLP
-        elif cfg.algo == 'TD3' or cfg.algo == 'SAC':
+        elif cfg.algo == 'TD3':
             NET = TD3MLP
+        elif cfg.algo == 'SAC':
+            NET = SACMLP
         else:
             raise NotImplementedError
 
@@ -111,7 +113,7 @@ class DDPGAgent(BaseAgent):
 
     def eval_step(self):
         state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
-        action_mean, action_std = self.network.act(state)
+        action_mean, _ = self.network.act(state)
         action = action_mean.tanh() * self.action_high
         return action.squeeze(0).cpu().numpy()
 

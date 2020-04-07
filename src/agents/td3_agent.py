@@ -36,7 +36,7 @@ class TD3Agent(DDPGAgent):
         self.critic_optimizer.step()
 
         if self.total_steps % cfg.policy_update_freq == 0:
-            current_action =  self.network.p(states).tanh() * self.action_high
+            current_action = self.network.p(states).tanh() * self.action_high
             policy_loss = self.network.v(torch.cat([states, current_action], dim=1)).mean().neg()
             self.actor_optimizer.zero_grad()
             policy_loss.backward()

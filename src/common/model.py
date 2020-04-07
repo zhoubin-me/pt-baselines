@@ -38,6 +38,7 @@ class SACMLP(nn.Module):
 
     def act(self, x):
         action_mean, action_std_log = torch.chunk(self.p(x), 2, dim=-1)
+        action_std_log.clamp_(self.LOG_STD_MIN, self.LOG_STD_MAX)
         return action_mean, action_std_log.exp()
 
     def action_value(self, state, action):
@@ -52,8 +53,6 @@ class SACMLP(nn.Module):
 
 
 class TD3MLP(nn.Module):
-    LOG_STD_MAX = 2
-    LOG_STD_MIN = -20
     def __init__(self, num_inputs, action_dim, hidden_size=256):
         super(TD3MLP, self).__init__()
         self.v = nn.Sequential(
