@@ -68,7 +68,7 @@ class A3CActor(mp.Process):
                 hx, cx = hx.detach(), cx.detach()
 
             # Sample experiences
-            for step in range(cfg.nsteps):
+            for step in range(cfg.mini_steps):
                 v, pi, (hx, cx) = self._network((torch.from_numpy(state).unsqueeze(0),(hx, cx)))
                 m = Categorical(logits=pi)
 
