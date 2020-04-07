@@ -216,7 +216,7 @@ class MLPNet(nn.Module):
         self.p_log_std = nn.Parameter(torch.zeros(1, action_dim), requires_grad=True)
 
     def act(self, x):
-        action_mean, action_log_std = torch.chunk(self.p(x), 2, dim=-1)
+        action_mean, action_log_std = torch.chunk(self.p(self.mlps(x)), 2, dim=-1)
         action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
         return action_mean, action_log_std.exp()
 
