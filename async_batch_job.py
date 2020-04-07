@@ -26,5 +26,5 @@ for cfg in cfgs:
 
     for i, game in enumerate(games):
         hold_on = " " if game == games[-1] else "&"
-        device_id = -1 if 'mujoco' in cfg else i
-        os.system(f'python run.py {cfg} --game {game} --seed {seed} --device_id {device_id} {hold_on}')
+        # device_id = -1 if 'mujoco' in cfg else i
+        os.system(f'python run.py {cfg} --game {game} --seed {seed} --device_id {i} {hold_on}')
