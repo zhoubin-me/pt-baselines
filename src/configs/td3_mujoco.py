@@ -18,6 +18,7 @@ class Config:
     log_interval = 5000
     eval_episodes = 10
     save_interval = int(1e5)
+    action_noise_level = 0.1
 
 
     # Optimizer related
