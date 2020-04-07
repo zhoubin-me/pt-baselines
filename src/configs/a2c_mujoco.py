@@ -20,7 +20,7 @@ class Config:
     use_lr_decay = True
 
     # Optimizer related
-    optimizer = 'kfac'
+    optimizer = 'rmsprop'
     gamma = 0.99
     lr = 3e-4
     eps = 1e-5

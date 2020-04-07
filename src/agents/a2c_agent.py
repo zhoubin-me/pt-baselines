@@ -212,10 +212,10 @@ class A2CAgent(BaseAgent):
 
                 dist, log_probs, entropy = self.pdist(pis, action_batch)
 
-                # value_loss = (value_batch + adv_batch - vs).pow(2).mean()
-                # policy_loss = (adv_batch.detach() * log_probs).mean().neg()
-                value_loss = (vs - return_batch).pow(2).mean()
-                policy_loss = ((vs - return_batch).detach() * log_probs).mean().neg()
+                value_loss = (value_batch + adv_batch - vs).pow(2).mean()
+                policy_loss = (adv_batch.detach() * log_probs).mean().neg()
+                # value_loss = (vs - return_batch).pow(2).mean()
+                # policy_loss = ((vs - return_batch).detach() * log_probs).mean().neg()
 
 
                 if cfg.optimizer == 'kfac' and self.optimizer.steps % self.optimizer.TCov == 0:
