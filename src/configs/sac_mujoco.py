@@ -18,13 +18,11 @@ class Config:
     save_interval = int(1e5)
     action_noise_level = 0.1
 
+
     # Replay related
     buffer_size = int(1e6)
     batch_size = 256
     prioritize = False
-    alpha = 0.6
-    beta0 = 0.4
-
 
     # Optimizer related
     optimizer = 'adam'
@@ -32,6 +30,9 @@ class Config:
     p_lr = 3e-4
     v_lr = 3e-4
     tau = 0.005
+    entropy_coef = 0.2
+    entroy_alpha = 0.6
+    nsteps = 1
 
     # Others
     hidden_size = 256

@@ -116,61 +116,62 @@ class A2CAgent(BaseAgent):
     def step(self):
         cfg = self.cfg
         rollouts = self.rollouts
-        with torch.no_grad():
-            for step in range(cfg.mini_steps):
 
-                if self.total_steps == 0:
-                    states = self.envs.reset()
-                    self.rollouts.obs[0].copy_(self.state_normalizer(states))
-                elif step == 0:
-                    if self.lr_scheduler is not None:
-                        self.lr_scheduler.step()
-                    self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
-                    self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
+        for step in range(cfg.mini_steps):
 
+            if self.total_steps == 0:
+                states = self.envs.reset()
+                self.rollouts.obs[0].copy_(self.state_normalizer(states))
+            elif step == 0:
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step()
+                self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
+                self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
+
+            with torch.no_grad():
                 v, pi = self.network(self.rollouts.obs[step])
 
-                actions, action_log_probs = self.act(pi)
+            actions, action_log_probs = self.act(pi)
 
-                states, rewards, dones, infos = self.envs.step(actions)
-                self.total_steps += cfg.num_processes
-                rewards = self.reward_normalizer(rewards)
-                masks = 1.0 - dones
-                badmasks = torch.tensor([[0.0] if 'TimeLimit.truncated' in info else [1.0] for info in infos], device=self.device)
+            states, rewards, dones, infos = self.envs.step(actions)
+            self.total_steps += cfg.num_processes
+            rewards = self.reward_normalizer(rewards)
+            masks = 1.0 - dones
+            badmasks = torch.tensor([[0.0] if 'TimeLimit.truncated' in info else [1.0] for info in infos], device=self.device)
 
-                rollouts.masks[step + 1].copy_(masks)
-                rollouts.badmasks[step + 1].copy_(badmasks)
-                rollouts.actions[step].copy_(actions)
-                rollouts.values[step].copy_(v)
-                rollouts.action_log_probs[step].copy_(action_log_probs)
-                rollouts.rewards[step].copy_(rewards)
-                rollouts.obs[step + 1].copy_(self.state_normalizer(states))
+            rollouts.masks[step + 1].copy_(masks)
+            rollouts.badmasks[step + 1].copy_(badmasks)
+            rollouts.actions[step].copy_(actions)
+            rollouts.values[step].copy_(v)
+            rollouts.action_log_probs[step].copy_(action_log_probs)
+            rollouts.rewards[step].copy_(rewards)
+            rollouts.obs[step + 1].copy_(self.state_normalizer(states))
 
 
 
-                for info in infos:
-                    if 'episode' in info:
-                        self.logger.store(TrainEpRet=info['episode']['r'])
+            for info in infos:
+                if 'episode' in info:
+                    self.logger.store(TrainEpRet=info['episode']['r'])
 
-            # Compute R and GAE
-            v_next, _ = self.network(self.rollouts.obs[-1])
+        # Compute R and GAE
+        v_next, _ = self.network(self.rollouts.obs[-1])
 
-            rollouts.values[-1].copy_(v_next)
-            rollouts.returns[-1].copy_(v_next)
-            rollouts.gaes[-1].zero_()
+        rollouts.values[-1].copy_(v_next)
+        rollouts.returns[-1].copy_(v_next)
+        rollouts.gaes[-1].zero_()
 
-            for step in reversed(range(cfg.mini_steps)):
-                if self.use_badmask:
-                    R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
-                    rollouts.returns[step] = R * rollouts.badmasks[step + 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
-                    delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
-                    gae = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step+1] * rollouts.gaes[step+1]
-                    rollouts.gaes[step] = gae * rollouts.badmasks[step + 1]
+        for step in reversed(range(cfg.mini_steps)):
+            if self.use_badmask:
+                R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
+                rollouts.returns[step] = R * rollouts.badmasks[step + 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
+                delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
+                gae = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step+1] * rollouts.gaes[step+1]
+                rollouts.gaes[step] = gae * rollouts.badmasks[step + 1]
 
-                else:
-                    rollouts.returns[step] = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
-                    delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
-                    rollouts.gaes[step] = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]
+            else:
+                rollouts.returns[step] = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
+                delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
+                rollouts.gaes[step] = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]
 
 
         self.update()

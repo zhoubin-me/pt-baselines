@@ -9,8 +9,7 @@ class Config:
 
     # Training related
     num_processes = 1
-    buffer_size = int(1e6)
-    batch_size = 256
+
     sgd_update_frequency = 1
 
     max_steps = int(1e6)
@@ -19,6 +18,13 @@ class Config:
     eval_episodes = 10
     save_interval = int(1e5)
     action_noise_level = 0.1
+
+    # Replay related
+    buffer_size = int(1e6)
+    batch_size = 256
+    prioritize = False
+    alpha = 0.6
+    beta0 = 0.4
 
 
     # Optimizer related

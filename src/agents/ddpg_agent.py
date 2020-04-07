@@ -9,7 +9,7 @@ import numpy as np
 from src.common.async_replay import AsyncReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
-from src.common.model import DDPGMLP, TD3MLP
+from src.common.model import DDPGMLP, TD3MLP, SACMLP
 from src.common.utils import close_obj, tensor
 from .base_agent import BaseAgent
 from .async_actor import AsyncActor
@@ -61,19 +61,33 @@ class DDPGAgent(BaseAgent):
         self.action_high = self.test_env.action_space.high[0]
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
-        self.replay = AsyncReplayBuffer(
-            buffer_size=cfg.buffer_size,
-            batch_size=cfg.batch_size,
-            device_id=cfg.device_id
-        )
+
+        if cfg.prioritize:
+            self.replay = AsyncReplayBuffer(
+                buffer_size=cfg.buffer_size,
+                batch_size=cfg.batch_size,
+                device_id=cfg.device_id,
+                beta0=cfg.beta0,
+                alpha=cfg.alpha
+            )
+        else:
+            self.replay = AsyncReplayBuffer(
+                buffer_size=cfg.buffer_size,
+                batch_size=cfg.batch_size,
+                device_id=cfg.device_id,
+            )
 
         if cfg.algo == 'DDPG':
-            self.network = DDPGMLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high, cfg.hidden_size).to(self.device)
+            NET = DDPGMLP
         elif cfg.algo == 'TD3':
-            self.network = TD3MLP(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0], self.action_high, cfg.hidden_size).to(self.device)
+            NET = TD3MLP
+        elif cfg.algo == 'SAC':
+            NET = SACMLP
         else:
             raise NotImplementedError
 
+        self.network = NET(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0],
+                           self.action_high, cfg.hidden_size).to(self.device)
         self.network.train()
         self.network.share_memory()
         self.target_network = copy.deepcopy(self.network)
@@ -108,12 +122,13 @@ class DDPGAgent(BaseAgent):
                 if 'episode' in info:
                     self.logger.store(TrainEpRet=info['episode']['r'])
         self.replay.add_batch(experiences)
-        self.update()
+
+
+        if self.total_steps > cfg.exploration_steps:
+            self.update()
 
     def update(self):
         cfg = self.cfg
-        if self.total_steps < cfg.exploration_steps:
-            return
 
         experiences = self.replay.sample()
         states, actions, rewards, next_states, terminals = experiences
@@ -123,8 +138,10 @@ class DDPGAgent(BaseAgent):
         terminals = terminals.float().view(-1, 1)
         rewards = rewards.float().view(-1, 1)
 
-        target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
-        target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
+        with torch.no_grad():
+            target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
+            target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
+
         current_q = self.network.action_value(states, actions)
         value_loss = F.mse_loss(current_q, target_q)
         self.critic_optimizer.zero_grad()

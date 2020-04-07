@@ -10,8 +10,7 @@ class TD3Agent(DDPGAgent):
 
     def update(self):
         cfg = self.cfg
-        if self.total_steps < cfg.exploration_steps:
-            return
+
         experiences = self.replay.sample()
         states, actions, rewards, next_states, terminals = experiences
         states = states.float()
@@ -24,7 +23,7 @@ class TD3Agent(DDPGAgent):
             next_actions_mean = self.target_network.act(next_states)
             dist = Normal(next_actions_mean, self.noise_std.expand_as(next_actions_mean))
             next_actions = dist.sample().clamp(-self.action_high, self.action_high)
-            target_q1, target_q2 = self.network.action_value(next_states, next_actions)
+            target_q1, target_q2 = self.target_network.action_value(next_states, next_actions)
             target_q = torch.min(target_q1, target_q2)
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
 
