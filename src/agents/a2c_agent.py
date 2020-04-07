@@ -12,7 +12,7 @@ from src.common.make_env import make_vec_envs
 from src.common.model import ConvNet, MLPNet, SepBodyMLP, SepBodyConv, DDPGMLP
 from src.common.logger import EpochLogger
 from src.common.normalizer import SignNormalizer, ImageNormalizer
-from src.common.utils import share_rms
+from src.common.utils import sync_rms
 from src.common.kfac_optimizer import KFACOptimizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
@@ -25,8 +25,6 @@ class A2CAgent(BaseAgent):
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
         self.envs = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=cfg.num_processes, log_dir=f'{cfg.log_dir}/train', allow_early_resets=False, device=self.device)
         self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
-        if hasattr(self.envs, 'ob_rms'):
-            share_rms(self.envs, self.test_env)
 
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
@@ -280,6 +278,8 @@ class A2CAgent(BaseAgent):
             if epoch > last_epoch:
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 last_epoch = epoch
+                if hasattr(self.envs, 'ob_rms'):
+                    sync_rms(self.envs, self.test_env)
                 test_returns = self.eval_episodes()
                 test_tabular = {
                     "Epoch": self.total_steps // cfg.save_interval,

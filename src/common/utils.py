@@ -3,11 +3,13 @@ import numpy as np
 import random
 import os
 from pathlib import Path
+import copy
 
 
-def share_rms(master_env, slave_env):
-    slave_env.ob_rms = master_env.ob_rms
-    slave_env.ret_rms = slave_env.ret_rms
+
+def sync_rms(master_env, slave_env):
+    slave_env.ob_rms = copy.deepcopy(master_env.ob_rms)
+    slave_env.ret_rms = copy.deepcopy(master_env.ret_rms)
 
 def mkdir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
