@@ -21,10 +21,12 @@ def plot(stage='train'):
     print(files)
 
     figs = {}
-    colors = Category10[8]
+    colors = Category20[20]
     algos = []
 
     for idx, file in enumerate(files):
+        if 'A2C' in file:
+            continue
         with open(file, 'r') as f:
             try:
                 data = pd.read_table(f)
