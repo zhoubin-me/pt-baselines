@@ -33,8 +33,8 @@ for seed in [1, 2, 3]:
         else:
             continue
 
-        keys =  ['ppo', 'trpo']
-        if any(lambda x: x in cfg, keys):
+        algos =  ['ppo', 'trpo']
+        if any(map(lambda x: x in cfg, algos)):
             pass
         else:
             continue
