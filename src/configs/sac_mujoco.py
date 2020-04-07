@@ -30,8 +30,6 @@ class Config:
     p_lr = 3e-4
     v_lr = 3e-4
     tau = 0.005
-    entropy_coef = 0.2
-    entroy_alpha = 0.6
     nsteps = 1
 
     # Others

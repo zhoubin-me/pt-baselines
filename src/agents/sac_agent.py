@@ -28,7 +28,7 @@ class SACAgent(DDPGAgent):
 
 
         with torch.no_grad():
-            next_actions, next_entropies, _ = self.target_network.act(next_states)
+            next_actions, next_entropies, _ = self.network.act(next_states)
             target_q1, target_q2 = self.target_network.action_value(next_states, next_actions)
             target_q = torch.min(target_q1, target_q2) + self.alpha * next_entropies
             target_q = rewards + (1.0 - terminals) * (cfg.gamma ** cfg.nsteps) * target_q.detach()
@@ -54,6 +54,9 @@ class SACAgent(DDPGAgent):
         self.alpha_optim.zero_grad()
         entropy_loss.backward()
         self.alpha_optim.step()
+
+        for param, target_param in zip(self.network.get_value_params(), self.target_network.get_value_params()):
+            target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
 
 
         self.logger.store(PLoss=policy_loss.item())
