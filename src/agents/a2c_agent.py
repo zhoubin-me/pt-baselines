@@ -28,8 +28,6 @@ class A2CAgent(BaseAgent):
 
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
-        elif cfg.algo == 'DDPG':
-            NET = DDPGMLP
         else:
             NET = ConvNet if len(self.envs.observation_space.shape) == 3 else MLPNet
 
@@ -160,7 +158,6 @@ class A2CAgent(BaseAgent):
             for step in reversed(range(cfg.mini_steps)):
                 R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
                 rollouts.returns[step] = R * rollouts.badmasks[step+ 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
-
                 delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
                 rollouts.gaes[step] = (delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step + 1] * rollouts.gaes[step+1]) * rollouts.badmasks[step + 1]
 
