@@ -18,4 +18,3 @@ for seed in [1, 2, 3, 4, 5]:
 
         for game in _mujoco7:
             os.system(f'python run.py {cfg} --game {game} --seed {seed} & ')
-

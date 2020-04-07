@@ -28,7 +28,7 @@ for i in range(NUM_THREADS):
 
 for seed in [1, 2, 3, 4, 5]:
     for cfg in cfgs:
-        if 'ppo_' in cfg or 'trpo_' in cfg:
+        if 'mujoco' in cfg:
             pass
         else:
             continue
