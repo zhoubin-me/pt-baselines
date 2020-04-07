@@ -45,7 +45,7 @@ class RainbowActor(AsyncActor):
         cfg = self.cfg
 
         if cfg.noisy or (self._total_steps > cfg.exploration_steps and np.random.rand() > self._random_action_prob()):
-            state = self._state_normalizer(tensor(self._state).float().to(self.device)).unsqueeze(0)
+            state = self._state_normalizer(tensor(self._state).float().to(self._device)).unsqueeze(0)
             with torch.no_grad():
                 probs, _ = self._network(state)
             action = (probs * self._atoms).sum(-1).argmax(dim=-1)
