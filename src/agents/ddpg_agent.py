@@ -27,7 +27,7 @@ class DDPGActor(AsyncActor):
         self._device = torch.device(f'cuda:{self.device_id}') if self.device_id >= 0 else torch.device('cpu')
         self._env = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
         self._action_high = self._env.action_space.high[0]
-        self._noise_std = torch.tensor(self.cfg.noise_level * self._action_high).to(self._device)
+        self._noise_std = torch.tensor(self.cfg.action_noise_level * self._action_high).to(self._device)
 
     def _transition(self):
         if self._state is None:
