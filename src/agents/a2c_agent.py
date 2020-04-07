@@ -159,7 +159,7 @@ class A2CAgent(BaseAgent):
             for step in reversed(range(cfg.mini_steps)):
                 if self.use_badmask:
                     R = rollouts.returns[step + 1] * cfg.gamma * rollouts.masks[step + 1] + rollouts.rewards[step]
-                    rollouts.returns[step] = R * rollouts.badmasks[step+ 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
+                    rollouts.returns[step] = R * rollouts.badmasks[step + 1] + (1 - rollouts.badmasks[step + 1]) * rollouts.values[step + 1]
                     delta = rollouts.rewards[step] + cfg.gamma * rollouts.values[step + 1] * rollouts.masks[step + 1] - rollouts.values[step]
                     gae = delta + cfg.gamma * cfg.gae_lambda * rollouts.masks[step+1] * rollouts.gaes[step+1]
                     rollouts.gaes[step] = gae * rollouts.badmasks[step + 1]
@@ -218,20 +218,8 @@ class A2CAgent(BaseAgent):
 
                 dist, log_probs, entropy = self.pdist(pis, action_batch)
 
-                # value_loss = (value_batch + adv_batch - vs).pow(2).mean()
-                # policy_loss = (adv_batch.detach() * log_probs).mean().neg()
-
-
-                if isinstance(self.envs.action_space, Box):
-                    value_loss = (value_batch + adv_batch - vs).pow(2).mean()
-                    policy_loss = (adv_batch.detach() * log_probs).mean().neg()
-                elif isinstance(self.envs.action_space, Discrete):
-                    value_loss = (vs - return_batch).pow(2).mean()
-                    policy_loss = ((vs - return_batch).detach() * log_probs).mean().neg()
-                else:
-                    raise NotImplementedError
-
-
+                value_loss = (return_batch - vs).pow(2).mean()
+                policy_loss = ((return_batch - vs).detach() * log_probs).mean().neg()
 
 
                 if cfg.optimizer == 'kfac' and self.optimizer.steps % self.optimizer.TCov == 0:

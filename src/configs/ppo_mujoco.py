@@ -25,7 +25,6 @@ class Config:
     gamma = 0.99
     lr = 3e-4
     eps = 1e-5
-    alpha = 0.99
 
 
     # Loss related

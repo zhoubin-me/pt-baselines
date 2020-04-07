@@ -24,7 +24,6 @@ class Config:
     gamma = 0.99
     lr = 3e-4
     eps = 1e-5
-    alpha = 0.99
 
     # TRPO related
     max_kl = 1e-2
@@ -36,7 +35,7 @@ class Config:
     fisher_frac = 0.125
 
     # Loss related
-    gae_lambda = 0.97
+    gae_lambda = 0.95
     entropy_coef = 0.0
     max_grad_norm = 0.5
     clip_param = 0.1

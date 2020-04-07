@@ -22,7 +22,7 @@ class Config:
     # Optimizer related
     optimizer = 'rmsprop'
     gamma = 0.99
-    lr = 3e-4
+    lr = 7e-4
     eps = 1e-5
     alpha = 0.99
 

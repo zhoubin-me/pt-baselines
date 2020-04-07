@@ -21,7 +21,7 @@ class Config:
 
     # Optimizer related
     optimizer = 'adam'
-    lr = 2.5e-4
+    lr = 3e-4
     eps = 1e-5
     gamma = 0.99
 
@@ -34,7 +34,7 @@ class Config:
     residual_tol = 1e-10
 
     # Loss related
-    gae_lambda = 0.97
+    gae_lambda = 0.95
     entropy_coef = 0.01
     max_grad_norm = 0.5
     clip_param = 0.1

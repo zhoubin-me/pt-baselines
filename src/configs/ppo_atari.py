@@ -22,9 +22,8 @@ class Config:
     # Optimization related
     optimizer = 'adam'
     gamma = 0.99
-    lr = 2.5e-4
+    lr = 3e-4
     eps = 1e-5
-    alpha = 0.99
 
     # Loss related
     gae_lambda = 0.95
