@@ -9,8 +9,7 @@ class SACAgent(DDPGAgent):
     def __init__(self, cfg):
         super(SACAgent, self).__init__(cfg)
 
-
-        self.target_entropy = -np.prod(self.env.action_space.shape)
+        self.target_entropy = torch.tensor(np.prod(self.test_env.action_space.shape)).to(self.device).float().neg()
         self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
         self.alpha = self.log_alpha.exp()
         self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=cfg.p_lr)
@@ -50,7 +49,6 @@ class SACAgent(DDPGAgent):
         self.actor_optimizer.step()
 
         entropy_loss = (self.log_alpha * (self.target_entropy - entropy).detach()).mean().neg()
-
         self.alpha_optim.zero_grad()
         entropy_loss.backward()
         self.alpha_optim.step()
