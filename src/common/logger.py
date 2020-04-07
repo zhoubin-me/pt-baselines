@@ -253,7 +253,7 @@ class Logger:
         print("-" * n_slashes)
         if self.test_file is not None:
             if self.first_test_row:
-                self.test_file.write("\t".join(keys) + "\n")
+                self.test_file.write("\t\t".join(keys) + "\n")
             self.test_file.write("\t\t".join(map(self.toStr, vals)) + "\n")
             self.test_file.flush()
         self.first_test_row = False
