@@ -116,9 +116,10 @@ class SepBodyConv(nn.Module):
 
 
 class SepBodyMLP(nn.Module):
-    def __init__(self, num_inputs, action_dim):
+    def __init__(self, num_inputs, action_dim, max_action):
         super(SepBodyMLP, self).__init__()
 
+        self.max_action = max_action
         self.v = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
@@ -128,7 +129,7 @@ class SepBodyMLP(nn.Module):
         self.p = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
-            nn.Linear(64, action_dim)
+            nn.Linear(64, action_dim), nn.Tanh()
         )
 
         self.apply(lambda m: init(m, np.sqrt(2)))
@@ -136,7 +137,7 @@ class SepBodyMLP(nn.Module):
 
     def forward(self, x):
         values = self.v(x)
-        logits = self.p(x)
+        logits = self.p(x) * self.max_action
         return values, logits
 
     def get_policy_params(self):
@@ -147,9 +148,10 @@ class SepBodyMLP(nn.Module):
 
 
 class MLPNet(nn.Module):
-    def __init__(self, num_inputs, action_dim):
+    def __init__(self, num_inputs, action_dim, max_action):
         super(MLPNet, self).__init__()
 
+        self.max_action = max_action
         self.mlps = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.Tanh(),
             nn.Linear(64, 64), nn.Tanh(),
@@ -164,7 +166,7 @@ class MLPNet(nn.Module):
     def forward(self, x):
         features = self.mlps(x)
         values = self.v(features)
-        logits = self.p(features)
+        logits = self.p(features).tanh() * self.max_action
         return values, logits
 
 

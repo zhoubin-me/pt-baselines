@@ -26,17 +26,19 @@ for i in range(NUM_THREADS):
     worker.daemon = True
     worker.start()
 
-for seed in [1, 2, 3, 4, 5]:
+for seed in [1, 2, 3]:
     for cfg in cfgs:
         if 'mujoco' in cfg:
             pass
         else:
             continue
 
-        if 'mujoco' not in cfg:
+        keys =  ['ppo', 'trpo']
+        if any(lambda x: x in cfg, keys):
+            pass
+        else:
             continue
 
         for game in _mujoco7:
             q.put((cfg, game, seed))
-
 q.join()

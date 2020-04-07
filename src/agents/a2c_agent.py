@@ -27,6 +27,9 @@ class A2CAgent(BaseAgent):
         self.test_env = make_vec_envs(cfg.game, seed=cfg.seed, num_processes=1, log_dir=f'{cfg.log_dir}/test', allow_early_resets=False, device=self.device)
 
         self.use_badmask = isinstance(self.envs.action_space, Box)
+        if self.use_badmask:
+            self.action_high = self.envs.action_space.high[0]
+
         if cfg.algo == 'TRPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
         else:
@@ -38,7 +41,7 @@ class A2CAgent(BaseAgent):
             self.state_normalizer = ImageNormalizer()
             self.action_store_dim = 1
         elif len(self.envs.observation_space.shape) == 1:
-            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0]).to(self.device)
+            self.network = NET(self.envs.observation_space.shape[0], self.envs.action_space.shape[0], self.action_high).to(self.device)
             self.reward_normalizer = lambda x: x
             self.state_normalizer = lambda x: x
             self.action_store_dim = self.envs.action_space.shape[0]
@@ -88,7 +91,7 @@ class A2CAgent(BaseAgent):
             action = dist.sample()
         elif isinstance(self.envs.action_space, Box):
             dist = Normal(pi, self.network.p_log_std.expand_as(pi).exp())
-            action = dist.sample()
+            action = dist.sample().clamp(-self.action_high, self.action_high)
         else:
             raise NotImplementedError('No such action space')
         return action
@@ -103,7 +106,7 @@ class A2CAgent(BaseAgent):
 
         elif isinstance(self.envs.action_space, Box):
             dist = Normal(pis, self.network.p_log_std.expand_as(pis).exp())
-            actions = dist.sample()
+            actions = dist.sample().clamp(-self.action_high, self.action_high)
             action_log_probs = dist.log_prob(actions).sum(dim=1, keepdim=True)
         else:
             raise NotImplementedError('No such action space')
