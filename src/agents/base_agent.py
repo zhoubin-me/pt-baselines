@@ -3,7 +3,7 @@ import torch
 import pickle
 import numpy as np
 from src.common.utils import close_obj
-
+from src.common.vec_env import VecEnv
 # Copied from ShangtongZhang/DeepRL
 # https://github.com/ShangtongZhang/DeepRL/blob/master/deep_rl/agent/BaseAgent.py
 
@@ -43,7 +43,7 @@ class BaseAgent:
 
     def eval_episode(self):
         env = self.test_env
-        if self.test_state is None or self.cfg.algo in ['DDPG', 'TD3']:
+        if self.test_state is None or not isinstance(env, VecEnv):
             self.test_state = env.reset()
         while True:
             action = self.eval_step()
