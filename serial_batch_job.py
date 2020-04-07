@@ -10,10 +10,19 @@ cfgs = glob.glob('src/configs/*.py')
 
 seed = 1
 for cfg in cfgs:
-    if 'a2c' in cfg:
-        pass
-    else:
+    exps = [
+        'a2c_atari', 'a3c_mujoco',
+        'a3c_atari',
+    ]
+
+
+    if not any(map(lambda x: x in cfg, exps)):
         continue
 
-    for game in _mujoco7:
-        os.system(f'python run.py {cfg} --game {game} --seed {seed} & ')
+    if 'mujoco' in cfg:
+        games = _mujoco7
+    else:
+        games = _atari7
+
+    for game in games:
+        os.system(f'python run.py {cfg} --game {game} --seed {seed}')

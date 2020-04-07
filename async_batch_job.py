@@ -7,24 +7,22 @@ from src.common.bench import _atari7, _mujoco7
 from run import main
 
 cfgs = glob.glob('src/configs/*.py')
-
 seed = 1
 for cfg in cfgs:
-    if 'mujoco' in cfg or 'rainbow' in cfg:
-        pass
-    else:
+
+    exps = [
+        'ppo_atari', 'trpo_atari',
+        'ddpg_mujoco', 'td3_mujoco',
+        'rainbow_atari'
+    ]
+
+    if not any(map(lambda x: x in cfg, exps)):
         continue
 
-    algos = ['td3', 'ddpg', 'rainbow']
-    if any(map(lambda x: x in cfg, algos)):
-        pass
-    else:
-        continue
-
-    if 'rainbow' in cfg:
-        games = _atari7
-    else:
+    if 'mujoco' in cfg:
         games = _mujoco7
+    else:
+        games = _atari7
 
     for game in games:
         hold_on = " " if game == games[-1] else "&"

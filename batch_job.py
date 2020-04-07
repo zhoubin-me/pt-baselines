@@ -28,17 +28,12 @@ for i in range(NUM_THREADS):
 
 for seed in [1, 2, 3]:
     for cfg in cfgs:
-        algos =  ['ppo', 'trpo']
-        if any(map(lambda x: x in cfg, algos)):
+        exps = ['trpo_mujoco', 'ppo_mujoco']
+        if any(map(lambda x: x in cfg, exps)):
             pass
         else:
             continue
 
-        if 'mujoco' in cfg:
-            games = _mujoco7
-        else:
-            games = _atari7
-
-        for game in games:
+        for game in _mujoco7:
             q.put((cfg, game, seed))
 q.join()
