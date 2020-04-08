@@ -122,6 +122,9 @@ class A3CActor(mp.Process):
             if done:
                 print(f"rank {self.n:2d},\t loss {loss.item():6.3f},\t rt {rs:5.0f},")
 
+                if self.counter.value > self.cfg.max_steps:
+                    return
+
 
 
 
