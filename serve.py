@@ -10,9 +10,8 @@ charts = GoogleCharts(app)
 @app.route("/")
 def index():
 
-    fs = glob.glob('log/*/')
 
-    line_chart = Chart("LineChart", "data")
+    line_chart = Chart("ScatterChart", "data")
     line_chart.options = {
                             "title": "X-Y",
                             "width": 800,
@@ -69,17 +68,19 @@ def train():
                     }
                     charts[game][col].data.add_column("number", key)
 
-                if key not in datas[game][col]:
-                    datas[game][col][key] = data[key].values
 
                 if algo_seed not in datas[game][col]:
-                    datas[game][col][algo_seed] = data[col].values
+                    datas[game][col][algo_seed] = {}
+                    for i, step in enumerate(data[key].values):
+                        datas[game][col][algo_seed][step] = data[col].values[i]
                     charts[game][col].data.add_column("number", algo_seed)
 
     for game, game_data in datas.items():
         for col, entry_data in game_data.items():
-            for i, step in enumerate(entry_data[key]):
-                entry = [v[i] for k, v in entry_data.items() if k != key]
+            max_steps = max([x.keys() for x in entry_data])
+
+            for step in range(max_steps):
+                entry = [x[step] if step in x else None for x in entry_data]
                 charts[game][col].data.add_row([step] + entry)
 
     return render_template("train.html", charts=charts)
