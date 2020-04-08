@@ -57,10 +57,12 @@ class SACAgent(DDPGAgent):
             target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
 
 
-        self.logger.store(PLoss=policy_loss.item())
-        self.logger.store(Entropy=entropy_loss.item())
-        self.logger.store(VLoss=value_loss.item())
-
+        kwargs = {
+            "PLoss": policy_loss,
+            "Entropy": entropy_loss,
+            "VLoss": value_loss
+        }
+        self.logger.store(**kwargs)
 
 
 

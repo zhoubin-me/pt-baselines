@@ -39,13 +39,14 @@ class DDPGActor(AsyncActor):
         else:
 
             state = tensor(self._state).float().to(self._device).unsqueeze(0)
-            if self.cfg.algo == 'SAC':
-                action, _, _ = self._network.act(state)
-                action = action.squeeze(0).cpu().numpy()
-            else:
-                action_mean = self._network.act(state)
-                dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
-                action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
+            with torch.no_grad():
+                if self.cfg.algo == 'SAC':
+                    action, _, _ = self._network.act(state)
+                    action = action.squeeze(0).cpu().numpy()
+                else:
+                    action_mean = self._network.act(state)
+                    dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
+                    action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
 
         next_state, reward, done, info = self._env.step(action)
         entry = [self._state, action, reward, next_state, int(done), info]
