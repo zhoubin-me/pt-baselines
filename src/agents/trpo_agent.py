@@ -2,8 +2,6 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical, Normal
 from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
-from gym.spaces import Box, Discrete
-import numpy as np
 from .ppo_agent import A2CAgent
 
 class TRPOAgent(A2CAgent):
@@ -79,7 +77,7 @@ class TRPOAgent(A2CAgent):
                 obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
 
                 vs = self.network.v(obs_batch)
-                value_loss = (vs - value_batch - gae_batch).pow(2).mean()
+                value_loss = F.mse_loss(vs, value_batch + gae_batch)
 
                 self.optimizer.zero_grad()
                 value_loss.backward()
@@ -114,7 +112,7 @@ class TRPOAgent(A2CAgent):
             max_trpo_step = max_step_coef * step
 
             with torch.no_grad():
-                value_loss = (vs - value_batch - gae_batch).pow(2).mean()
+                value_loss = F.mse_loss(vs, value_batch + gae_batch)
                 params_old = parameters_to_vector(self.network.get_policy_params())
                 expected_improve = grads @ max_trpo_step
 

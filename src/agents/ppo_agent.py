@@ -1,6 +1,4 @@
 import torch
-from torch.distributions import Categorical, Normal
-from gym.spaces import Discrete, Box
 
 from .a2c_agent import A2CAgent
 

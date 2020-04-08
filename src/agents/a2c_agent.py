@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch.distributions import Categorical, Normal
 from gym.spaces import Box, Discrete
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
@@ -16,7 +17,6 @@ from src.common.utils import sync_rms
 from src.common.kfac_optimizer import KFACOptimizer
 
 Rollouts = namedtuple('Rollouts', ['obs', 'actions', 'action_log_probs', 'rewards', 'values', 'masks', 'badmasks', 'returns', 'gaes'])
-
 
 class A2CAgent(BaseAgent):
     def __init__(self, cfg):
@@ -222,7 +222,7 @@ class A2CAgent(BaseAgent):
 
                 dist, log_probs, entropy = self.pdist(pis, action_batch)
 
-                value_loss = (return_batch - vs).pow(2).mean()
+                value_loss = F.mse_loss(vs, return_batch)
                 policy_loss = ((return_batch - vs).detach() * log_probs).mean().neg()
 
 
