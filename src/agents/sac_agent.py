@@ -48,13 +48,10 @@ class SACAgent(DDPGAgent):
         for param, target_param in zip(self.network.get_value_params(), self.target_network.get_value_params()):
             target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
 
-
-        kwargs = {
-            "PLoss": policy_loss,
-            "Entropy": entropy_loss,
-            "VLoss": value_loss
-        }
-        self.logger.store(**kwargs)
+        self.logger.store(
+            VLoss=value_loss,
+            PLoss=policy_loss
+        )
 
 
 

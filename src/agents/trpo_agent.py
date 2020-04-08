@@ -34,10 +34,8 @@ class TRPOAgent(A2CAgent):
             improve = f(scaled)
             expected_improve_rate = expected_improve_rate * scaling
             if improve / expected_improve_rate > accept_ratio and improve > 0:
-                print("We good! %f" % (scaling,))
                 return scaled
 
-        print("We are bad!")
         return 0
 
     @staticmethod
@@ -134,11 +132,8 @@ class TRPOAgent(A2CAgent):
                 new_params = params_old + final_step
                 vector_to_parameters(new_params, self.network.get_policy_params())
 
-            kwargs = {
-                'Loss': 0,
-                'VLoss': value_loss.item(),
-                'PLoss': policy_loss_neg.item(),
-                'Entropy': entropy.item()
-            }
+                self.logger.store(
+                    VLoss=value_loss,
+                    PLoss=policy_loss_neg.neg()
+                )
 
-            self.logger.store(**kwargs)

@@ -35,13 +35,12 @@ class PPOAgent(A2CAgent):
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
 
-                kwargs = {
-                    'Loss': loss.item(),
-                    'VLoss': value_loss.item(),
-                    'PLoss': policy_loss.item(),
-                    'Entropy': entropy.item(),
-                }
-                self.logger.store(**kwargs)
+                self.logger.store(
+                    Loss=loss,
+                    VLoss=value_loss,
+                    PLoss=policy_loss,
+                    Entropy=entropy
+                )
 
 
 

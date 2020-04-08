@@ -223,7 +223,7 @@ class RainbowAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
-        self.logger.store(Loss=loss.item())
+        self.logger.store(Loss=loss)
 
         if self.total_steps % cfg.target_network_update_freq == 0:
             self.target_network.load_state_dict(self.network.state_dict())

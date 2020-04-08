@@ -22,17 +22,19 @@ class TD3Agent(DDPGAgent):
         current_q1, current_q2 = self.network.action_value(states, actions)
         value_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
 
-        self.logger.store(VLoss=value_loss.item())
+
         self.critic_optimizer.zero_grad()
         value_loss.backward()
         self.critic_optimizer.step()
+        self.logger.store(VLoss=value_loss)
 
         if self.total_steps % cfg.policy_update_freq == 0:
             policy_loss = self.network.v(torch.cat([states, self.network.p(states)], dim=1)).mean().neg()
             self.actor_optimizer.zero_grad()
             policy_loss.backward()
             self.actor_optimizer.step()
-            self.logger.store(PLoss=policy_loss.item())
 
             for param, target_param in zip(self.network.parameters(), self.target_network.parameters()):
                 target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
+
+            self.logger.store(PLoss=policy_loss)

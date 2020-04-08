@@ -117,13 +117,10 @@ class DDPGAgent(BaseAgent):
         for param, target_param in zip(self.network.parameters(), self.target_network.parameters()):
             target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
 
-        kwargs = {
-            'Loss': 0,
-            'VLoss': value_loss
-            'PLoss': policy_loss
-            'Entropy': None,
-        }
-        self.logger.store(**kwargs)
+        self.logger.store(
+            VLoss = value_loss,
+            PLoss = policy_loss
+        )
 
     def run(self):
 
