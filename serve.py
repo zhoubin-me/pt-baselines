@@ -82,7 +82,7 @@ def train():
                 entry = [v[i] for k, v in entry_data.items() if k != key]
                 charts[game][col].data.add_row([step] + entry)
 
-    return render_template("index.html", charts=charts)
+    return render_template("train.html", charts=charts)
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -14,10 +14,14 @@
   </head>
   <body>
     <h1>Hello, world!</h1>
-        {{ line_chart() }}
-    <!-- Optional JavaScript -->
-    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
 
+
+    {{ for game, rcharts in charts.items() }}
+      {{ for col, chart in rcharts.items() }}
+            <h2> {{game}} - {{col}} </h2>
+            {{chart()}}}
+       {{endfor}}
+    {{endfor}}
 
 
 
