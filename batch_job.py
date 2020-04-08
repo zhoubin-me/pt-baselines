@@ -28,7 +28,13 @@ for i in range(NUM_THREADS):
 
 for seed in [1, 2, 3]:
     for cfg in cfgs:
-        exps = ['trpo_mujoco', 'ppo_mujoco']
+        exps = [
+            'trpo_mujoco',
+            'ppo_mujoco',
+            'td3_mujoco',
+            'sac_mujoco',
+            'ddpg_mujoco'
+        ]
         if any(map(lambda x: x in cfg, exps)):
             pass
         else:
