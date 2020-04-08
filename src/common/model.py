@@ -44,7 +44,8 @@ class SACMLP(nn.Module):
         action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
         dist = Normal(action_mean, action_log_std.exp())
 
-        xs = dist.sample()
+
+        xs = dist.rsample()
         action = xs.tanh() * self.max_action
 
         action_log_prob = dist.log_prob(xs) - torch.log(1 - action.pow(2) + self.eps)
