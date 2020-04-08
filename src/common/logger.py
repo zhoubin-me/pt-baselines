@@ -334,6 +334,8 @@ class EpochLogger(Logger):
         values.
         """
         for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
             if not (k in self.epoch_dict.keys()):
                 self.epoch_dict[k] = []
             self.epoch_dict[k].append(v)
