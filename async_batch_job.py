@@ -13,8 +13,8 @@ for cfg in cfgs:
     exps = [
         # 'ppo_atari',
         # 'trpo_atari',
-        'ddpg_mujoco',
-        # 'td3_mujoco',
+        # 'ddpg_mujoco',
+        'td3_mujoco',
         # 'rainbow_atari',
         'sac_mujoco'
     ]
