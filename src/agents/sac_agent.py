@@ -35,14 +35,14 @@ class SACAgent(DDPGAgent):
         current_q1, current_q2 = self.network.action_value(states, actions)
         value_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
 
-        self.critic_optimizer.zero_grad()
-        value_loss.backward()
-        self.critic_optimizer.step()
-
         sampled_action, entropy, _ = self.network.act(states)
         q1, q2 = self.network.action_value(states, sampled_action)
         q = torch.min(q1, q2)
         policy_loss = (q + self.alpha * entropy).mean().neg()
+
+        self.critic_optimizer.zero_grad()
+        value_loss.backward()
+        self.critic_optimizer.step()
 
         self.actor_optimizer.zero_grad()
         policy_loss.backward()
@@ -52,6 +52,8 @@ class SACAgent(DDPGAgent):
         self.alpha_optim.zero_grad()
         entropy_loss.backward()
         self.alpha_optim.step()
+
+        self.alpha = self.log_alpha.exp()
 
         for param, target_param in zip(self.network.get_value_params(), self.target_network.get_value_params()):
             target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)
