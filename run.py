@@ -4,7 +4,6 @@ import git
 from importlib.machinery import SourceFileLoader
 from src.common.utils import random_seed, mkdir, set_thread
 from src.agents import *
-import git
 
 def main(**kwargs):
     parser = argparse.ArgumentParser(description='Hyperparameters Settings')
