@@ -6,55 +6,12 @@ import copy
 import time
 import numpy as np
 
-from src.common.async_replay import AsyncReplayBuffer
+from src.common.replay_buffer import ReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
 from src.common.model import DDPGMLP, TD3MLP, SACMLP
-from src.common.utils import close_obj, tensor
+from src.common.utils import tensor
 from .base_agent import BaseAgent
-from .async_actor import AsyncActor
-
-
-class DDPGActor(AsyncActor):
-    def __init__(self, cfg, lock, device_id):
-        super(DDPGActor, self).__init__(cfg)
-        self.lock = lock
-        self.device_id = device_id
-        self.start()
-
-    def _set_up(self):
-        cfg = self.cfg
-        self._device = torch.device(f'cuda:{self.device_id}') if self.device_id >= 0 else torch.device('cpu')
-        self._env = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
-        self._action_high = self._env.action_space.high[0]
-        self._noise_std = torch.tensor(self.cfg.action_noise_level * self._action_high).to(self._device)
-
-    def _transition(self):
-        if self._state is None:
-            self._state = self._env.reset()
-
-
-        if self._total_steps < self.cfg.exploration_steps:
-            action = self._env.action_space.sample()
-        else:
-
-            state = tensor(self._state).float().to(self._device).unsqueeze(0)
-            with torch.no_grad():
-                if self.cfg.algo == 'SAC':
-                    action, _, _ = self._network.act(state)
-                    action = action.squeeze(0).cpu().numpy()
-                else:
-                    action_mean = self._network.act(state)
-                    dist = Normal(action_mean, self._noise_std.expand_as(action_mean))
-                    action = dist.sample().clamp(-self._action_high, self._action_high).squeeze(0).cpu().numpy()
-
-        next_state, reward, done, info = self._env.step(action)
-        entry = [self._state, action, reward, next_state, int(done), info]
-        self._total_steps += 1
-        self._state = next_state
-        if done:
-            self._state = self._env.reset()
-        return entry
 
 
 class DDPGAgent(BaseAgent):
@@ -62,26 +19,13 @@ class DDPGAgent(BaseAgent):
         super(DDPGAgent, self).__init__(cfg)
         self.lock = mp.Lock()
         self.device = torch.device(f'cuda:{cfg.device_id}') if cfg.device_id >= 0 else torch.device('cpu')
-        self.actor = DDPGActor(cfg, self.lock, cfg.device_id)
+
+        self.env = make_bullet_env(cfg.game, cfg.log_dir + '/train', seed=cfg.seed)()
         self.test_env = make_bullet_env(cfg.game, cfg.log_dir + '/test', seed=cfg.seed + 1)()
         self.action_high = self.test_env.action_space.high[0]
 
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
-
-        if cfg.prioritize:
-            self.replay = AsyncReplayBuffer(
-                buffer_size=cfg.buffer_size,
-                batch_size=cfg.batch_size,
-                device_id=cfg.device_id,
-                beta0=cfg.beta0,
-                alpha=cfg.alpha
-            )
-        else:
-            self.replay = AsyncReplayBuffer(
-                buffer_size=cfg.buffer_size,
-                batch_size=cfg.batch_size,
-                device_id=cfg.device_id,
-            )
+        self.replay = ReplayBuffer(size=cfg.buffer_size)
 
         if cfg.algo == 'DDPG':
             NET = DDPGMLP
@@ -95,10 +39,7 @@ class DDPGAgent(BaseAgent):
         self.network = NET(self.test_env.observation_space.shape[0], self.test_env.action_space.shape[0],
                            self.action_high, cfg.hidden_size).to(self.device)
         self.network.train()
-        self.network.share_memory()
         self.target_network = copy.deepcopy(self.network)
-
-        self.actor.set_network(self.network)
 
         self.actor_optimizer = torch.optim.Adam(self.network.get_policy_params(), lr=cfg.p_lr)
         self.critic_optimizer = torch.optim.Adam(self.network.get_value_params(), lr=cfg.v_lr)
@@ -106,45 +47,54 @@ class DDPGAgent(BaseAgent):
         self.total_steps = 0
         self.noise_std = torch.tensor(self.cfg.action_noise_level * self.action_high).to(self.device)
 
-    def close(self):
-        close_obj(self.replay)
-        close_obj(self.actor)
-
     def eval_step(self):
         state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
         if self.cfg.algo == 'SAC':
             _, _, action = self.network.act(state)
         else:
             action = self.network.act(state)
-
         return action.squeeze(0).cpu().numpy()
 
     def step(self):
         cfg = self.cfg
 
         ## Environment Step
-        transitions = self.actor.step()
-        experiences = []
-        for state, action, reward, next_state, done, info in transitions:
-            self.total_steps += 1
-            experiences.append([state, action, reward, next_state, done])
-            if isinstance(info, dict):
-                if 'episode' in info:
-                    self.logger.store(TrainEpRet=info['episode']['r'])
-        self.replay.add_batch(experiences)
+        if self.total_steps == 0:
+            self.state = self.env.reset()
 
+        if self.total_steps < self.cfg.exploration_steps:
+            action = self.env.action_space.sample()
+        else:
+            state = tensor(self.state).float().to(self.device).unsqueeze(0)
+            with torch.no_grad():
+                if self.cfg.algo == 'SAC':
+                    action, _, _ = self.network.act(state)
+                    action = action.squeeze(0).cpu().numpy()
+                else:
+                    action_mean = self.network.act(state)
+                    dist = Normal(action_mean, self.noise_std.expand_as(action_mean))
+                    action = dist.sample().clamp(-self.action_high, self.action_high).squeeze(0).cpu().numpy()
+
+        next_state, reward, done, info = self.env.step(action)
+        self.total_steps += 1
+        self.replay.add(self.state, action, reward, next_state, int(done))
+
+        if isinstance(info, dict):
+            if 'episode' in info:
+                self.logger.store(TrainEpRet=info['episode']['r'])
+
+        self.state = next_state
+        if done:
+            self.state = self.env.reset()
 
         if self.total_steps > cfg.exploration_steps:
             self.update()
 
     def update(self):
         cfg = self.cfg
+        experiences = self.replay.sample(cfg.batch_size)
+        states, actions, rewards, next_states, terminals = map(lambda x: tensor(x).to(self.device).float(), experiences)
 
-        experiences = self.replay.sample()
-        states, actions, rewards, next_states, terminals = experiences
-        states = states.float()
-        next_states = next_states.float()
-        actions = actions.float()
         terminals = terminals.float().view(-1, 1)
         rewards = rewards.float().view(-1, 1)
 
