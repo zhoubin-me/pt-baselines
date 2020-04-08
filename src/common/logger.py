@@ -11,6 +11,7 @@ import numpy as np
 import os.path as osp, time, atexit, os
 from pathlib import Path
 import datetime
+import torch
 from tensorboardX import SummaryWriter
 
 color2num = dict(

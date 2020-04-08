@@ -4,6 +4,7 @@ import glob
 from multiprocessing import Process, JoinableQueue
 import sys
 import json
+import torch
 from src.common.bench import _atari7, _mujoco7
 from run import main
 
@@ -13,9 +14,9 @@ NUM_THREADS = 50
 
 def run_single_config(queue):
     while True:
-        config_path, game, seed = queue.get()
+        config_path, game, seed, device = queue.get()
         try:
-            main(cfg=config_path, game=game, seed=seed)
+            main(cfg=config_path, game=game, seed=seed, device_id=device)
         except Exception as e:
             print("ERROR", e)
             raise e
@@ -26,6 +27,9 @@ for i in range(NUM_THREADS):
     worker.daemon = True
     worker.start()
 
+N = torch.cuda.device_count()
+
+count = 0
 for seed in [1, 2, 3]:
     for cfg in cfgs:
         exps = [
@@ -35,13 +39,13 @@ for seed in [1, 2, 3]:
             'sac_mujoco',
             'ddpg_mujoco'
         ]
-        if any(map(lambda x: x in cfg, exps)):
-            pass
-        else:
+
+        if not any(map(lambda x: x in cfg, exps)):
             continue
 
         for game in _mujoco7:
-            q.put((cfg, game, seed))
+            q.put((cfg, game, seed, count % N))
+            count += 1
 q.join()
 
 
