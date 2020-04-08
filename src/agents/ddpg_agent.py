@@ -88,16 +88,17 @@ class DDPGAgent(BaseAgent):
             self.state = self.env.reset()
 
         if self.total_steps > cfg.exploration_steps:
-            self.update()
+            experiences = self.replay.sample(cfg.batch_size)
+            states, actions, rewards, next_states, terminals = map(lambda x: tensor(x).to(self.device).float(), experiences)
 
-    def update(self):
+            terminals = terminals.float().view(-1, 1)
+            rewards = rewards.float().view(-1, 1)
+            self.update(states, actions, rewards, next_states, terminals)
+
+    def update(self, *args):
+        states, actions, rewards, next_states, terminals = args
+
         cfg = self.cfg
-        experiences = self.replay.sample(cfg.batch_size)
-        states, actions, rewards, next_states, terminals = map(lambda x: tensor(x).to(self.device).float(), experiences)
-
-        terminals = terminals.float().view(-1, 1)
-        rewards = rewards.float().view(-1, 1)
-
         with torch.no_grad():
             target_q = self.target_network.action_value(next_states, self.target_network.p(next_states))
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
@@ -118,8 +119,8 @@ class DDPGAgent(BaseAgent):
 
         kwargs = {
             'Loss': 0,
-            'VLoss': value_loss.item(),
-            'PLoss': policy_loss.item(),
+            'VLoss': value_loss
+            'PLoss': policy_loss
             'Entropy': None,
         }
         self.logger.store(**kwargs)

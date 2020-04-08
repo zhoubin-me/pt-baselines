@@ -13,18 +13,11 @@ class SACAgent(DDPGAgent):
         self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
         self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=cfg.p_lr)
 
-    def update(self):
+    def update(self, *args):
+
+        states, actions, rewards, next_states, terminals = args
+
         cfg = self.cfg
-
-        experiences = self.replay.sample()
-        states, actions, rewards, next_states, terminals = experiences
-        states = states.float()
-        next_states = next_states.float()
-        actions = actions.float()
-        terminals = terminals.float().view(-1, 1)
-        rewards = rewards.float().view(-1, 1)
-
-
         with torch.no_grad():
             next_actions, next_entropies, _ = self.network.act(next_states)
             target_q1, target_q2 = self.target_network.action_value(next_states, next_actions)

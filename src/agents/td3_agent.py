@@ -8,17 +8,9 @@ class TD3Agent(DDPGAgent):
         super(TD3Agent, self).__init__(cfg)
 
 
-    def update(self):
+    def update(self, *args):
+        states, actions, rewards, next_states, terminals = args
         cfg = self.cfg
-
-        experiences = self.replay.sample()
-        states, actions, rewards, next_states, terminals = experiences
-        states = states.float()
-        next_states = next_states.float()
-        actions = actions.float()
-        terminals = terminals.float().view(-1, 1)
-        rewards = rewards.float().view(-1, 1)
-
         with torch.no_grad():
             next_actions_mean = self.target_network.act(next_states)
             dist = Normal(next_actions_mean, self.noise_std.expand_as(next_actions_mean))
