@@ -22,10 +22,6 @@ class Config:
     # Replay related
     buffer_size = int(1e6)
     batch_size = 256
-    prioritize = False
-    alpha = 0.6
-    beta0 = 0.4
-
 
     # Optimizer related
     optimizer = 'adam'
