@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     game = "Reacher"
-    algo = "TD3"
+    algo = "SAC"
     seed = 0
     device_id = 0
 
