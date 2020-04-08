@@ -139,7 +139,8 @@ class DDPGAgent(BaseAgent):
                 logger.log_tabular('Speed', cfg.log_interval / (time.time() - t0))
                 logger.log_tabular('NumOfEp', len(logger.epoch_dict['TrainEpRet']))
                 logger.log_tabular('TrainEpRet', with_min_and_max=True)
-                logger.log_tabular('Loss', average_only=True)
+                logger.log_tabular('VLoss', average_only=True)
+                logger.log_tabular('PLoss', average_only=True)
                 logger.log_tabular('RemHrs',
                                    (cfg.max_steps - self.total_steps) / cfg.log_interval * (time.time() - t0) / 3600.0)
                 t0 = time.time()

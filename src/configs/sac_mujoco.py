@@ -9,7 +9,6 @@ class Config:
 
     # Training related
     sgd_update_frequency = 1
-    policy_update_freq = 2
 
     max_steps = int(1e6)
     exploration_steps = 25000
