@@ -25,7 +25,7 @@ def plot():
     algos = []
 
     for idx, fname in enumerate(files):
-        if 'SAC' in fname or 'A2C' in fname:
+        if 'A2C' in fname:
             continue
 
         with open(fname, 'r') as f:
@@ -66,9 +66,10 @@ def plot():
                     ('Title', title)
                 ]
 
-                if len(data[col].values) < 100:
-                    continue
-                y = savgol_filter(data[col].values, 51, 2, mode='nearest')
+                if len(data[col].values) > 100:
+                    y = savgol_filter(data[col].values, 51, 2, mode='nearest')
+                else:
+                    y = data[col].values
 
                 if col not in figs[game]:
                     figs[game][col] = figure(width=800, height=600, title=col, tools='pan, wheel_zoom, reset') # , tooltips=tooltips)
