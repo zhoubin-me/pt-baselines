@@ -11,7 +11,6 @@ class SACAgent(DDPGAgent):
 
         self.target_entropy = torch.tensor(np.prod(self.test_env.action_space.shape)).to(self.device).float().neg()
         self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
-        self.alpha = self.log_alpha.exp()
         self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=cfg.p_lr)
 
     def update(self):
@@ -38,7 +37,7 @@ class SACAgent(DDPGAgent):
         sampled_action, entropy, _ = self.network.act(states)
         q1, q2 = self.network.action_value(states, sampled_action)
         q = torch.min(q1, q2)
-        policy_loss = (q + self.alpha * entropy).mean().neg()
+        policy_loss = (q + self.log_alpha.exp() * entropy).mean().neg()
 
         self.critic_optimizer.zero_grad()
         value_loss.backward()
