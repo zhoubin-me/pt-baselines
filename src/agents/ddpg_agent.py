@@ -49,7 +49,7 @@ class DDPGAgent(BaseAgent):
 
     def eval_step(self):
         state = tensor(self.test_state).float().to(self.device).unsqueeze(0)
-        if self.cfg.algo == 'SAC':
+        if self.cfg.algo == 'SAC' or self.cfg.algo == 'TRE':
             _, _, action = self.network.act(state)
         else:
             action = self.network.act(state)
@@ -67,7 +67,7 @@ class DDPGAgent(BaseAgent):
         else:
             state = tensor(self.state).float().to(self.device).unsqueeze(0)
             with torch.no_grad():
-                if self.cfg.algo == 'SAC':
+                if self.cfg.algo == 'SAC' or self.cfg.algo == 'TRE':
                     action, _, _ = self.network.act(state)
                     action = action.squeeze(0).cpu().numpy()
                 else:
