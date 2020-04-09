@@ -87,7 +87,7 @@ class DDPGAgent(BaseAgent):
         if done:
             self.state = self.env.reset()
 
-        if self.total_steps > cfg.exploration_steps:
+        if self.total_steps > cfg.exploration_steps and self.total_steps % self.cfg.update_frequency == 0:
             experiences = self.replay.sample(cfg.batch_size)
             states, actions, rewards, next_states, terminals = map(lambda x: tensor(x).to(self.device).float(), experiences)
 

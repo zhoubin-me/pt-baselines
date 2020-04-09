@@ -10,7 +10,7 @@ class TRPOAgent(A2CAgent):
 
 
     @staticmethod
-    def conjugate_gradients(fvp_func, b, iters):
+    def conjugate_gradients(fvp_func, b, iters, residual_tolerance):
         x = torch.zeros_like(b)
         r = b.clone()
         p = b.clone()
@@ -24,6 +24,8 @@ class TRPOAgent(A2CAgent):
             new_rnorm = torch.dot(r, r)
             ratio = new_rnorm / rnorm
             p = r + ratio * p
+            if new_rnorm < residual_tolerance:
+                break
         return x
 
     @staticmethod
@@ -104,7 +106,7 @@ class TRPOAgent(A2CAgent):
                 return torch.cat([v.contiguous().view(-1) for v in hv]).detach() + x * cg_damping
 
 
-            step = self.conjugate_gradients(fisher_product, grads, cfg.cg_iters)
+            step = self.conjugate_gradients(fisher_product, grads, cfg.cg_iters, cfg.residual_tol)
 
             max_step_coef = (2 * cfg.max_kl / (step @ fisher_product(step))) ** (0.5)
             max_trpo_step = max_step_coef * step

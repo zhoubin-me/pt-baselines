@@ -8,7 +8,7 @@ class Config:
     device_id = 0
 
     # Training related
-    sgd_update_frequency = 1
+    update_frequency = 1
     policy_update_freq = 2
 
     max_steps = int(1e6)

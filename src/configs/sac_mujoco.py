@@ -8,7 +8,7 @@ class Config:
     device_id = 0
 
     # Training related
-    sgd_update_frequency = 1
+    update_frequency = 1
 
     max_steps = int(1e6)
     exploration_steps = 25000

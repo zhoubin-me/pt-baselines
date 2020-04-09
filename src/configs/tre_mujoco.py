@@ -3,13 +3,11 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     game = "Reacher"
-    algo = "DDPG"
+    algo = "TRE"
     seed = 0
     device_id = 0
 
     # Training related
-    num_processes = 1
-
     update_frequency = 1
 
     max_steps = int(1e6)
@@ -29,6 +27,14 @@ class Config:
     p_lr = 3e-4
     v_lr = 3e-4
     tau = 0.005
+
+    # TRPO related
+    max_kl = 1e-2
+    cg_damping = 0.1
+    cg_iters = 10
+    accept_ratio = 0.1
+    max_backtracks = 10
+    residual_tol = 1e-10
 
     # Others
     hidden_size = 256
