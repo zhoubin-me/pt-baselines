@@ -9,7 +9,7 @@ import numpy as np
 from src.common.replay_buffer import ReplayBuffer
 from src.common.make_env import make_bullet_env
 from src.common.logger import EpochLogger
-from src.common.model import DDPGMLP, TD3MLP, SACMLP
+from src.common.model import DDPGMLP, TD3MLP, SACMLP, TREMLP
 from src.common.utils import tensor
 from .base_agent import BaseAgent
 
@@ -27,12 +27,16 @@ class DDPGAgent(BaseAgent):
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.replay = ReplayBuffer(size=cfg.buffer_size)
 
-        if cfg.algo == 'DDPG':
-            NET = DDPGMLP
-        elif cfg.algo == 'TD3':
-            NET = TD3MLP
-        elif cfg.algo == 'SAC':
-            NET = SACMLP
+
+        NETs = {
+            'DDPG': DDPGMLP,
+            'TD3': TD3MLP,
+            'SAC': SACMLP,
+            'TRE': TREMLP
+        }
+
+        if cfg.algo in NETs:
+            NET = NETs[cfg.algo]
         else:
             raise NotImplementedError
 
@@ -58,36 +62,37 @@ class DDPGAgent(BaseAgent):
     def step(self):
         cfg = self.cfg
 
-        ## Environment Step
-        if self.total_steps == 0:
-            self.state = self.env.reset()
+        for step in range(cfg.update_frequency):
+            ## Environment Step
+            if self.total_steps == 0:
+                self.state = self.env.reset()
 
-        if self.total_steps < self.cfg.exploration_steps:
-            action = self.env.action_space.sample()
-        else:
-            state = tensor(self.state).float().to(self.device).unsqueeze(0)
-            with torch.no_grad():
-                if self.cfg.algo == 'SAC' or self.cfg.algo == 'TRE':
-                    action, _, _ = self.network.act(state)
-                    action = action.squeeze(0).cpu().numpy()
-                else:
-                    action_mean = self.network.act(state)
-                    dist = Normal(action_mean, self.noise_std.expand_as(action_mean))
-                    action = dist.sample().clamp(-self.action_high, self.action_high).squeeze(0).cpu().numpy()
+            if self.total_steps < self.cfg.exploration_steps:
+                action = self.env.action_space.sample()
+            else:
+                state = tensor(self.state).float().to(self.device).unsqueeze(0)
+                with torch.no_grad():
+                    if self.cfg.algo == 'SAC' or self.cfg.algo == 'TRE':
+                        action, _, _ = self.network.act(state)
+                        action = action.squeeze(0).cpu().numpy()
+                    else:
+                        action_mean = self.network.act(state)
+                        dist = Normal(action_mean, self.noise_std.expand_as(action_mean))
+                        action = dist.sample().clamp(-self.action_high, self.action_high).squeeze(0).cpu().numpy()
 
-        next_state, reward, done, info = self.env.step(action)
-        self.total_steps += 1
-        self.replay.add(self.state, action, reward, next_state, int(done))
+            next_state, reward, done, info = self.env.step(action)
+            self.total_steps += 1
+            self.replay.add(self.state, action, reward, next_state, int(done))
 
-        if isinstance(info, dict):
-            if 'episode' in info:
-                self.logger.store(TrainEpRet=info['episode']['r'])
+            if isinstance(info, dict):
+                if 'episode' in info:
+                    self.logger.store(TrainEpRet=info['episode']['r'])
 
-        self.state = next_state
-        if done:
-            self.state = self.env.reset()
+            self.state = next_state
+            if done:
+                self.state = self.env.reset()
 
-        if self.total_steps > cfg.exploration_steps and self.total_steps % self.cfg.update_frequency == 0:
+        if self.total_steps > cfg.exploration_steps:
             experiences = self.replay.sample(cfg.batch_size)
             states, actions, rewards, next_states, terminals = map(lambda x: tensor(x).to(self.device).float(), experiences)
 
@@ -128,7 +133,7 @@ class DDPGAgent(BaseAgent):
         cfg = self.cfg
 
         t0 = time.time()
-        logger.store(TrainEpRet=0, Loss=0)
+        logger.store(TrainEpRet=0, Loss=0, VLoss=0, PLoss=0, Entropy=0)
         last_epoch = -1
 
         while self.total_steps < cfg.max_steps:

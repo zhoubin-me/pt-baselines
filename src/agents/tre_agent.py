@@ -6,16 +6,16 @@ from torch.nn.utils.convert_parameters import vector_to_parameters, parameters_t
 from .ddpg_agent import DDPGAgent
 from .trpo_agent import TRPOAgent
 
-class TD3Agent(DDPGAgent):
+class TREAgent(DDPGAgent):
     def __init__(self, cfg):
-        super(TD3Agent, self).__init__(cfg)
+        super(TREAgent, self).__init__(cfg)
 
 
     def update(self, *args):
         states, actions, rewards, next_states, terminals = args
         cfg = self.cfg
         with torch.no_grad():
-            next_actions, _, _, _ = self.network.act(next_states)
+            next_actions, _, _ = self.network.act(next_states)
             target_q1, target_q2 = self.target_network.action_value(next_states, next_actions)
             target_q = torch.min(target_q1, target_q2)
             target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
