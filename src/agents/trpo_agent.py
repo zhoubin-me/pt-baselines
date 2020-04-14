@@ -37,29 +37,21 @@ class TRPOAgent(A2CAgent):
             expected_improve_rate = expected_improve_rate * scaling
             if improve / expected_improve_rate > accept_ratio and improve > 0:
                 return scaled
-
         return 0
 
     @staticmethod
     def KL(pdist, qdist=None):
         if isinstance(pdist, Normal):
             p_mean, p_std = pdist.loc, pdist.scale
-            d = p_mean.shape[0]
             if qdist is None:
                 q_mean, q_std = p_mean.detach(), p_std.detach()
             else:
                 q_mean, q_std = qdist.loc.detach(), qdist.scale.detach()
 
-            detp = p_std.log().sum(-1, keepdim=True).exp()
-            detq = q_std.log().sum(-1, keepdim=True).exp()
-            diff = q_mean - p_mean
+            mean_diff = q_mean - p_mean
 
-            log_quot_frac = detp.log() - detq.log()
-            tr = (p_std / q_std).sum(-1, keepdim=True)
-            quadratic = ((diff / q_std) * diff).sum(-1, keepdim=True)
-
-            kl = 0.5 * (log_quot_frac - d + tr + quadratic)
-            kl = kl.mean()
+            kl = p_std / q_std + mean_diff.pow(2) / q_std - 1 + q_std.log() - p_std.log()
+            kl = kl.sum(-1, keepdim=True).mean() * 0.5
 
         elif isinstance(pdist, Categorical):
             kl = F.kl_div(pdist.logits.log_softmax(-1), pdist.probs.detach(), reduction='batchmean')
@@ -124,10 +116,13 @@ class TRPOAgent(A2CAgent):
                     pdist_new, log_prob_new, _ = self.pdist(pis_new, action_batch)
                     policy_loss_neg_new = (adv_batch * (log_prob_new - action_log_prob_batch).exp()).mean()
                     kl_new = self.KL(pdist, pdist_new)
+                    improve = policy_loss_neg_new - policy_loss_neg
 
                     if policy_loss_neg_new <= policy_loss_neg or kl_new > cfg.max_kl:
+                        # print('Failed', kl_new, improve)
                         return -float('inf')
-                    return policy_loss_neg_new - policy_loss_neg
+                    # print('Success', kl_new, improve)
+                    return improve
 
                 final_step = self.line_search(backtrac_fn, max_trpo_step, expected_improve, cfg.max_backtracks, cfg.accept_ratio)
 

@@ -20,7 +20,6 @@ class BaseAgent:
         close_obj(self.test_env)
 
     def save(self, filename):
-
         torch.save(self.network.state_dict(), '%s.model' % (filename))
         if hasattr(self.test_env, 'ob_rms'):
             with open('%s.stats' % (filename), 'wb') as f:

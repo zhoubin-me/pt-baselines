@@ -30,16 +30,16 @@ for i in range(NUM_THREADS):
 N = torch.cuda.device_count()
 
 count = 0
-for seed in [1, 2, 3]:
+for seed in [1, 2, 3, 4, 5]:
     for cfg in cfgs:
         exps = [
-            'tre_mujoco'
             # 'ppo_mujoco',
             # 'trpo_mujoco',
 
-            # 'ddpg_mujoco',
-            # 'td3_mujoco',
-            # 'sac_mujoco',
+            'ddpg_mujoco',
+            'td3_mujoco',
+            'sac_mujoco',
+            'tre_mujoco'
         ]
 
         if not any(map(lambda x: x in cfg, exps)):

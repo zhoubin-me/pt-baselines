@@ -27,7 +27,6 @@ class DDPGAgent(BaseAgent):
         self.logger = EpochLogger(cfg.log_dir, exp_name=cfg.algo)
         self.replay = ReplayBuffer(size=cfg.buffer_size)
 
-
         NETs = {
             'DDPG': DDPGMLP,
             'TD3': TD3MLP,

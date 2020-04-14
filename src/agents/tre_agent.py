@@ -23,12 +23,6 @@ class TREAgent(DDPGAgent):
         current_q1, current_q2 = self.network.action_value(states, actions)
         value_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
 
-        self.critic_optimizer.zero_grad()
-        value_loss.backward()
-        self.critic_optimizer.step()
-        self.logger.store(VLoss=value_loss)
-
-
 
         sampled_action, pdist, _ = self.network.act(states)
         policy_adv = self.network.v(torch.cat([states, sampled_action], dim=1)).mean()
@@ -56,19 +50,27 @@ class TREAgent(DDPGAgent):
             def backtrac_fn(s):
                 params_new = params_old + s
                 vector_to_parameters(params_new, self.network.get_policy_params())
+
                 sampled_action_new, pdist_new, _ = self.network.act(states)
                 policy_adv_new = self.network.v(torch.cat([states, sampled_action_new], dim=1)).mean()
                 kl_new = TRPOAgent.KL(pdist, pdist_new)
+                improve = policy_adv_new - policy_adv
 
-                if policy_adv_new <= policy_adv or kl_new > cfg.max_kl:
+                if improve < 0 or kl_new > cfg.max_kl:
+                    # print("Failed", kl_new, improve)
                     return -float('inf')
-                return policy_adv_new - policy_adv
+                # print("Success", kl_new, improve)
+                return improve
 
             final_step = TRPOAgent.line_search(backtrac_fn, max_trpo_step, expected_improve, cfg.max_backtracks, cfg.accept_ratio)
 
             new_params = params_old + final_step
             vector_to_parameters(new_params, self.network.get_policy_params())
 
+        self.critic_optimizer.zero_grad()
+        value_loss.backward()
+        self.critic_optimizer.step()
+        self.logger.store(VLoss=value_loss)
 
         for param, target_param in zip(self.network.parameters(), self.target_network.parameters()):
             target_param.data.copy_(cfg.tau * param.data + (1 - cfg.tau) * target_param.data)

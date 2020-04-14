@@ -19,20 +19,24 @@ class TREMLP(nn.Module):
         super(TREMLP, self).__init__()
         self.max_action = max_action
         self.v = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
         self.v2 = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
+
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, action_dim * 2)
         )
 
@@ -43,10 +47,11 @@ class TREMLP(nn.Module):
         action_log_std = action_log_std.clamp(self.LOG_STD_MIN, self.LOG_STD_MAX)
         dist = Normal(action_mean, action_log_std.exp())
 
-        xs = dist.rsample()
-        action_sampled = xs.tanh() * self.max_action
 
-        return action_sampled, dist, action_mean.tanh() * self.max_action
+        xs = dist.rsample()
+        action = xs.tanh() * self.max_action
+
+        return action, dist, action_mean.tanh() * self.max_action
 
     def action_value(self, state, action):
         x = torch.cat([state, action], dim=1)
@@ -68,21 +73,24 @@ class SACMLP(nn.Module):
         super(SACMLP, self).__init__()
         self.max_action = max_action
         self.v = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
         self.v2 = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
 
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, action_dim * 2)
         )
 
@@ -117,21 +125,24 @@ class TD3MLP(nn.Module):
         super(TD3MLP, self).__init__()
         self.max_action = max_action
         self.v = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
         self.v2 = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
 
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, action_dim), nn.Tanh()
         )
 
@@ -156,16 +167,19 @@ class DDPGMLP(nn.Module):
 
         self.max_action = max_action
         self.v = nn.Sequential(
-            nn.Linear(num_inputs + action_dim, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs + action_dim, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, 1)
         )
 
         self.p = nn.Sequential(
-            nn.Linear(num_inputs, hidden_size), nn.Tanh(),
-            nn.Linear(hidden_size, hidden_size), nn.Tanh(),
+            nn.Linear(num_inputs, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size), nn.ReLU(),
             nn.Linear(hidden_size, action_dim), nn.Tanh()
         )
+
 
         self.apply(lambda m: init(m, np.sqrt(2)))
 

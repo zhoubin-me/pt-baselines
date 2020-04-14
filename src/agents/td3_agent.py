@@ -17,7 +17,7 @@ class TD3Agent(DDPGAgent):
             next_actions = dist.sample().clamp(-self.action_high, self.action_high)
             target_q1, target_q2 = self.target_network.action_value(next_states, next_actions)
             target_q = torch.min(target_q1, target_q2)
-            target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q.detach()
+            target_q = rewards + (1.0 - terminals) * cfg.gamma * target_q
 
         current_q1, current_q2 = self.network.action_value(states, actions)
         value_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)

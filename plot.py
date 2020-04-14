@@ -47,7 +47,8 @@ def plot():
             algos.append(algo)
 
         algo_index = algos.index(algo)
-        color = colors[algo_index * 4 + int(seed)]
+        subidx = 0 if int(seed) == 1 else 1
+        color = colors[algo_index * 4 + subidx]
 
         if game not in figs:
             figs[game] = {}
