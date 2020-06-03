@@ -11,14 +11,15 @@ from src.common.bench import _atari50, _mujoco7
 def make_env(game, **kwargs):
     if game in _atari50:
         return make_atari_env(game, **kwargs)
-    elif game in _mujoco7:
+    elif game in _mujoco7 or game in ['Walker2d']:
         return make_bullet_env(game, **kwargs)
     else:
         raise NotImplementedError("Please implement yourself")
 
 def make_bullet_env(game, log_prefix, seed=1234, record_video=False, **kwargs):
     def trunk():
-        env = gym.make(f"{game}BulletEnv-v0")
+        # env = gym.make(f"{game}BulletEnv-v0")
+        env = gym.make(f"{game}-v2")
         env.seed(seed)
         env = Monitor(env=env, filename=log_prefix, allow_early_resets=True)
         env = wrappers.Monitor(env, log_prefix, force=True) if record_video else env
