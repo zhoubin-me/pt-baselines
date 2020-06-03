@@ -23,20 +23,19 @@ class Config:
     # Optimizer related
     optimizer = 'adam'
     gamma = 0.99
-    lr = 3e-4
+    lr_v = 3e-4
+    lr_p = 3e-4
     eps = 1e-5
-
 
     # Loss related
     gae_lambda = 0.95
     entropy_coef = 0
     value_loss_coef = 0.5
     max_grad_norm = 0.5
-    clip_param = 0.1
-
+    clip_param = 0.2
 
     # Others
-    hidden_size = 256
+    hidden_size = 64
     ckpt = ""
     log_dir = ""
     play = False

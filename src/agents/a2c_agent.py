@@ -30,7 +30,7 @@ class A2CAgent(BaseAgent):
         if self.use_badmask:
             self.action_high = self.envs.action_space.high[0]
 
-        if cfg.algo == 'TRPO':
+        if cfg.algo == 'TRPO' or cfg.algo == 'PPO':
             NET = SepBodyConv if len(self.envs.observation_space.shape) == 3 else SepBodyMLP
         else:
             NET = ConvNet if len(self.envs.observation_space.shape) == 3 else MLPNet
@@ -51,7 +51,8 @@ class A2CAgent(BaseAgent):
         if cfg.optimizer == 'rmsprop':
             self.optimizer = torch.optim.RMSprop(self.network.parameters(), cfg.lr, eps=cfg.eps, alpha=cfg.alpha)
         elif cfg.optimizer == 'adam':
-            self.optimizer = torch.optim.Adam(self.network.parameters(), cfg.lr, eps=cfg.eps)
+            self.optimizer_v = torch.optim.Adam(self.network.get_value_params(), cfg.lr_v)
+            self.optimizer_p = torch.optim.Adam(self.network.get_policy_params(), cfg.lr_p)
         elif cfg.optimizer == 'kfac':
             self.optimizer = KFACOptimizer(self.network)
         else:
@@ -285,15 +286,15 @@ class A2CAgent(BaseAgent):
             if epoch > last_epoch:
                 self.save(f'{cfg.ckpt_dir}/{self.total_steps:08d}')
                 last_epoch = epoch
-                if hasattr(self.envs, 'ob_rms'):
-                    sync_rms(self.envs, self.test_env)
-                test_returns = self.eval_episodes()
-                test_tabular = {
-                    "Epoch": self.total_steps // cfg.save_interval,
-                    "Steps": self.total_steps,
-                    "NumOfEp": len(test_returns),
-                    "AverageTestEpRet": np.mean(test_returns),
-                    "StdTestEpRet": np.std(test_returns),
-                    "MaxTestEpRet": np.max(test_returns),
-                    "MinTestEpRet": np.min(test_returns)}
-                logger.dump_test(test_tabular)
+                # if hasattr(self.envs, 'ob_rms'):
+                #     sync_rms(self.envs, self.test_env)
+                # test_returns = self.eval_episodes()
+                # test_tabular = {
+                #     "Epoch": self.total_steps // cfg.save_interval,
+                #     "Steps": self.total_steps,
+                #     "NumOfEp": len(test_returns),
+                #     "AverageTestEpRet": np.mean(test_returns),
+                #     "StdTestEpRet": np.std(test_returns),
+                #     "MaxTestEpRet": np.max(test_returns),
+                #     "MinTestEpRet": np.min(test_returns)}
+                # logger.dump_test(test_tabular)

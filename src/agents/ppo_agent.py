@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 from .a2c_agent import A2CAgent
 
@@ -9,17 +10,29 @@ class PPOAgent(A2CAgent):
     def update(self):
         cfg = self.cfg
 
+        # Value Step
         for epoch in range(cfg.mini_epoches):
             sampler = self.sample()
             for batch_data in sampler:
                 obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
 
-                vs, pis = self.network(obs_batch)
+                sel = mask_batch.bool()
+                vs = self.network.v(obs_batch)
+                vs_target = value_batch + gae_batch
+                value_loss = F.mse_loss(vs[sel], vs_target[sel])
 
-                value_loss = (vs - gae_batch - value_batch).pow(2)
-                vs_clipped = value_batch + (vs - value_batch).clamp(-cfg.clip_param, cfg.clip_param)
-                vs_loss_clipped = (vs_clipped - gae_batch - value_batch).pow(2)
-                value_loss = 0.5 * torch.max(value_loss, vs_loss_clipped).mean()
+                self.optimizer_v.zero_grad()
+                value_loss.backward()
+                self.optimizer_v.step()
+
+
+        # Policy Step
+        for epoch in range(cfg.mini_epoches):
+            sampler = self.sample()
+            for batch_data in sampler:
+                obs_batch, action_batch, value_batch, return_batch, mask_batch, action_log_prob_batch, gae_batch, adv_batch = batch_data
+
+                pis = self.network.p(obs_batch)
 
                 dist, action_log_probs, entropy = self.pdist(pis, action_batch)
 
@@ -28,16 +41,15 @@ class PPOAgent(A2CAgent):
                 surr2 = torch.clamp(ratio, 1.0 - cfg.clip_param, 1.0 + cfg.clip_param) * adv_batch
                 policy_loss = torch.min(surr1, surr2).mean().neg()
 
-                loss = value_loss * cfg.value_loss_coef + policy_loss - entropy * cfg.entropy_coef
+                loss = policy_loss - entropy * cfg.entropy_coef
 
-                self.optimizer.zero_grad()
+                self.optimizer_p.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
-                self.optimizer.step()
+                # torch.nn.utils.clip_grad_norm_(self.network.parameters(), cfg.max_grad_norm)
+                self.optimizer_p.step()
 
                 self.logger.store(
                     Loss=loss,
-                    VLoss=value_loss,
                     PLoss=policy_loss,
                     Entropy=entropy
                 )
