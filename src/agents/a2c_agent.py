@@ -125,9 +125,10 @@ class A2CAgent(BaseAgent):
                 states = self.envs.reset()
                 self.rollouts.obs[0].copy_(self.state_normalizer(states))
             elif step == 0:
-                if self.lr_scheduler is not None:
+                if hasattr(self, 'lr_scheduler_p') and hasattr(self, 'lr_scheduler_v'):
                     self.lr_scheduler_p.step()
                     self.lr_scheduler_v.step()
+
                 self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
                 self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
