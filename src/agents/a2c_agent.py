@@ -60,7 +60,8 @@ class A2CAgent(BaseAgent):
 
         if cfg.use_lr_decay:
             scheduler = lambda step : 1 - step * cfg.num_processes * cfg.mini_steps / cfg.max_steps
-            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, scheduler)
+            self.lr_scheduler_v = torch.optim.lr_scheduler.LambdaLR(self.optimizer_v, scheduler)
+            self.lr_scheduler_p = torch.optim.lr_scheduler.LambdaLR(self.optimizer_p, scheduler)
         else:
             self.lr_scheduler = None
 
@@ -125,7 +126,8 @@ class A2CAgent(BaseAgent):
                 self.rollouts.obs[0].copy_(self.state_normalizer(states))
             elif step == 0:
                 if self.lr_scheduler is not None:
-                    self.lr_scheduler.step()
+                    self.lr_scheduler_p.step()
+                    self.lr_scheduler_v.step()
                 self.rollouts.obs[0].copy_(self.rollouts.obs[-1])
                 self.rollouts.masks[0].copy_(self.rollouts.masks[-1])
 
